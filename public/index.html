@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreamento</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- ✅ PWA: Link para o Manifest e cor do tema -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1E3A8A">
+
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col">
+
+  <header class="bg-blue-900 text-white p-4 text-center font-bold text-xl shadow-lg">
+    Rastreamento
+    <button id="toggle-dark" class="ml-4 px-2 py-1 bg-gray-700 text-sm rounded hover:bg-gray-600 transition-colors">Alternar Tema</button>
+  </header>
+
+  <main class="flex-grow p-6 max-w-3xl mx-auto w-full">
+    <!-- Rastreamento -->
+    <section id="tracking-section" class="mb-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+      <h2 class="text-xl font-semibold mb-2">Consulta de Carga</h2>
+      <p class="text-gray-600 dark:text-gray-300 mb-4">Digite o número do Booking ou do Container para rastrear a sua carga.</p>
+      <div class="flex flex-col sm:flex-row gap-2">
+        <input id="tracking-input" type="text" placeholder="Digite Booking ou Container" class="flex-grow px-4 py-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+        <button id="tracking-button" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors w-full sm:w-auto">Rastrear</button>
+      </div>
+      <div id="tracking-results" class="mt-4" aria-live="polite"></div>
+    </section>
+
+    <!-- Área Administrativa -->
+    <section id="login-section" class="mt-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+      <h2 class="text-lg font-semibold mb-2">Acesso Restrito</h2>
+      <p class="text-gray-600 dark:text-gray-300 mb-4">Acesse para gerir os dados de rastreamento ou visualizar as suas operações.</p>
+      
+      <label for="email-input" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Email</label>
+      <input type="email" id="email-input" placeholder="seu-email@exemplo.com" class="w-full px-4 py-2 border rounded mb-4 mt-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+      
+      <label for="password-input" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Senha</label>
+      <input type="password" id="password-input" placeholder="Digite a senha" class="w-full px-4 py-2 border rounded mb-2 mt-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+      
+      <p id="password-error" class="text-red-500 text-sm hidden mb-2"></p>
+      <button id="login-button" class="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded w-full mt-2">Entrar</button>
+      <div class="text-center mt-4">
+        <a href="register.html" class="text-sm text-blue-600 hover:underline dark:text-blue-400">Solicitar acesso</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bg-gray-800 text-white text-center p-4 text-sm">
+    &copy; 2025 Rastreamento
+  </footer>
+
+  <!-- Firebase config -->
+  <script>
+    const __firebase_config = JSON.stringify({
+        apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
+        authDomain: "mercosul-teste.firebaseapp.com",
+        projectId: "mercosul-teste",
+        storageBucket: "mercosul-teste.appspot.com",
+        messagingSenderId: "650943607449",
+        appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
+        measurementId: "G-KJHFXFLJ6K"
+    });
+    const __app_id = "mercosul-line";
+  </script>
+
+  <!-- Application Script -->
+  <script type="module" src="js/script.js"></script>
+
+  <!-- ✅ PWA: Registo do Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => console.log('Service Worker registado com sucesso:', registration))
+          .catch(error => console.log('Falha ao registar Service Worker:', error));
+      });
+    }
+  </script>
+</body>
+</html>
