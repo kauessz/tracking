@@ -1,126 +1,131 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal do Cliente</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
-    <style>
-        /* Estilo para a seta do FAQ */
-        details > summary {
-            list-style: none;
-        }
-        details > summary::-webkit-details-marker {
-            display: none;
-        }
-        details > summary::before {
-            content: '+';
-            padding-right: 0.5rem;
-            font-weight: bold;
-        }
-        details[open] > summary::before {
-            content: '-';
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal do Cliente</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* Seta do FAQ */
+    details > summary { list-style: none; cursor: pointer; }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::before { content: '+'; padding-right: .5rem; font-weight: bold; }
+    details[open] > summary::before { content: '-'; }
+  </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col">
+<body class="bg-gray-100 min-h-screen flex flex-col">
 
-    <header class="bg-blue-900 text-white p-4 flex justify-between items-center font-bold text-xl shadow-lg">
-        <span id="portal-title">Portal do Cliente</span>
-        <div>
-            <button id="toggle-dark" class="mr-4 px-2 py-1 bg-gray-700 text-sm rounded hover:bg-gray-600 transition-colors">Alternar Tema</button>
-            <button id="logout-button" class="text-sm text-white hover:underline">Sair</button>
+  <header class="topbar">
+    <div class="page-wrap flex items-center justify-between">
+      <span id="portal-title" class="font-bold text-xl">Portal do Cliente</span>
+      <div class="flex items-center gap-2">
+        <button id="toggle-dark" class="px-3 py-1 bg-white/10 rounded text-sm hover:bg-white/20">Alternar Tema</button>
+        <button id="logout-button" class="text-sm hover:underline">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-wrap flex-grow w-full">
+    <!-- KPI -->
+    <section id="client-dashboard" class="kpi-grid mb-6">
+      <div class="kpi kpi-blue">
+        <h3>Total de Operações</h3>
+        <p id="total-ops">0</p>
+      </div>
+      <div class="kpi kpi-green">
+        <h3>Operações On Time</h3>
+        <p id="on-time-ops">0</p>
+      </div>
+      <div class="kpi kpi-red">
+        <h3>Operações com Atraso</h3>
+        <p id="delayed-ops-pct">0%</p>
+      </div>
+    </section>
+
+    <!-- Tabela -->
+    <section id="operations-section" class="card">
+      <div class="card-body">
+        <h2 class="text-2xl font-semibold mb-4">As Minhas Operações</h2>
+        <div class="table-wrap">
+          <table class="min-w-full table">
+            <thead>
+              <tr>
+                <th class="text-left">Nº Cliente</th>
+                <th class="text-left">Booking</th>
+                <th class="text-left">Container</th>
+                <th class="text-left">Previsão Início</th>
+                <th class="text-left">Início Execução</th>
+                <th class="text-left">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="operations-table-body"></tbody>
+          </table>
         </div>
-    </header>
+      </div>
+    </section>
 
-    <main class="flex-grow p-6 w-full max-w-7xl mx-auto">
-        <!-- Dashboard do Cliente -->
-        <section id="client-dashboard" class="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="bg-blue-100 dark:bg-blue-900 p-4 rounded-lg shadow">
-                <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">Total de Operações</h3>
-                <p id="total-ops" class="text-3xl font-bold text-blue-900 dark:text-blue-100">0</p>
-            </div>
-            <div class="bg-green-100 dark:bg-green-900 p-4 rounded-lg shadow">
-                <h3 class="text-sm font-medium text-green-800 dark:text-green-200">Operações On Time</h3>
-                <p id="on-time-ops" class="text-3xl font-bold text-green-900 dark:text-green-100">0</p>
-            </div>
-            <div class="bg-red-100 dark:bg-red-900 p-4 rounded-lg shadow">
-                <h3 class="text-sm font-medium text-red-800 dark:text-red-200">Operações com Atraso</h3>
-                <p id="delayed-ops-pct" class="text-3xl font-bold text-red-900 dark:text-red-100">0%</p>
-            </div>
-        </section>
+    <!-- FAQ -->
+    <section id="faq-section" class="card mt-6">
+      <div class="card-body">
+        <h2 class="text-2xl font-semibold mb-4">Perguntas Frequentes (FAQ)</h2>
+        <div class="space-y-4">
+          <details class="border-b pb-2">
+            <summary class="font-semibold">O que significa "Previsão Início"?</summary>
+            <p class="mt-2 text-sm text-gray-600">Data e hora programadas para o início da operação.</p>
+          </details>
+          <details class="border-b pb-2">
+            <summary class="font-semibold">O que significa "Início Execução"?</summary>
+            <p class="mt-2 text-sm text-gray-600">Data/hora reais de início. A diferença para a previsão indica atraso ou pontualidade.</p>
+          </details>
+          <details class="border-b pb-2">
+            <summary class="font-semibold">Como é calculado o atraso?</summary>
+            <p class="mt-2 text-sm text-gray-600">Considera a diferença entre “Previsão Início” e “Início Execução”. Se a previsão já passou e não iniciou, o atraso conta em tempo real.</p>
+          </details>
+          <details class="border-b pb-2">
+            <summary class="font-semibold">Com quem falar em caso de problema?</summary>
+            <p class="mt-2 text-sm text-gray-600">
+              Contato do time de atendimento:
+              <a href="mailto:atendimento@mercosul-line.com.br" class="text-blue-600 hover:underline">atendimento@mercosul-line.com.br</a> | tel 13 3226-2872.
+            </p>
+          </details>
+          <details class="border-b pb-2">
+            <summary class="font-semibold">Onde consultar o dead line do navio?</summary>
+            <p class="mt-2 text-sm text-gray-600">
+              Programação disponível em
+              <a href="http://mercosul-line.com.br/servicos/rotas/programacao" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">mercosul-line.com.br/servicos/rotas/programacao</a>.
+            </p>
+          </details>
+          <details class="border-b pb-2">
+            <summary class="font-semibold">O que é e como declarar o VGM?</summary>
+            <p class="mt-2 text-sm text-gray-600">
+              VGM (“Verified Gross Mass”) é obrigatório pela SOLAS/IMO.
+              Declare no portal:
+              <a href="https://dashboard.mercosul-line.com.br/access/login" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">dashboard.mercosul-line.com.br</a>.
+            </p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
 
-        <section id="operations-section" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">As Minhas Operações</h2>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nº Cliente</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Booking</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Container</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Previsão Início</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Início Execução</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody id="operations-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        <!-- Os dados serão carregados aqui -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
+  <footer class="bg-gray-800 text-white text-center p-4 text-sm">
+    &copy; 2025 Rastreamento
+  </footer>
 
-        <!-- Secção de FAQ -->
-        <section id="faq-section" class="mt-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Perguntas Frequentes (FAQ)</h2>
-            <div class="space-y-4">
-                <details class="border-b dark:border-gray-700 pb-2">
-                    <summary class="font-semibold cursor-pointer">O que significa "Previsão Início"?</summary>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Este campo indica a data e hora programadas para o início da sua operação, como a chegada do veículo para carga ou descarga.</p>
-                </details>
-                <details class="border-b dark:border-gray-700 pb-2">
-                    <summary class="font-semibold cursor-pointer">O que significa "Início Execução"?</summary>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Este campo mostra a data e hora reais em que a operação começou. A diferença entre este campo e a "Previsão Início" determina se houve atraso.</p>
-                </details>
-                <details class="border-b dark:border-gray-700 pb-2">
-                    <summary class="font-semibold cursor-pointer">Como é calculado o atraso?</summary>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">O atraso é calculado com base na diferença entre a "Previsão Início" e o "Início Execução". Se uma operação ainda não começou mas a previsão já passou, o atraso é calculado em tempo real em relação à hora atual.</p>
-                </details>
-                 <details class="border-b dark:border-gray-700 pb-2">
-                    <summary class="font-semibold cursor-pointer">Com quem devo falar se tiver um problema com a minha carga?</summary>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Se tiver alguma questão urgente sobre a sua operação, por favor, entre em contato com o time de atendimento no e-mail <a href="mailto:atendimento@mercosul-line.com.br" class="text-blue-600 hover:underline dark:text-blue-400">atendimento@mercosul-line.com.br</a> ou tel 13 3226-2872.</p>
-                </details>
-                <details class="border-b dark:border-gray-700 pb-2">
-                    <summary class="font-semibold cursor-pointer">Onde consultar o dead line do navio?</summary>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">Toda programação de navios está disponivel no site <a href="http://mercosul-line.com.br/servicos/rotas/programacao" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline dark:text-blue-400">http://mercosul-line.com.br/servicos/rotas/programacao</a> selecione sua rota e localize o navio.</p>
-                </details>
-                <details class="border-b dark:border-gray-700 pb-2">
-                    <summary class="font-semibold cursor-pointer">O que é e como declarar o VGM?</summary>
-                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">VGM significa "Verified Gross Mass", ou Massa Bruta Verificada em português. É o peso total de um contêiner de carga, incluindo a carga, a embalagem e o próprio contêiner. O VGM é um requisito obrigatório no transporte marítimo, estabelecido pela Convenção SOLAS da Organização Marítima Internacional (IMO). O objetivo é garantir a segurança do transporte marítimo, evitando acidentes causados por declarações incorretas de peso do contêiner. Deve ser declarado no portal do cliente <a href="https://dashboard.mercosul-line.com.br/access/login" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline dark:text-blue-400">https://dashboard.mercosul-line.com.br/access/login</a>.</p>
-                </details>
-            </div>
-        </section>
-    </main>
-
-    <footer class="bg-gray-800 text-white text-center p-4 text-sm">
-        &copy; 2025 Rastreamento
-    </footer>
-
-    <script>
-        const __firebase_config = JSON.stringify({
-            apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
-            authDomain: "mercosul-teste.firebaseapp.com",
-            projectId: "mercosul-teste",
-            storageBucket: "mercosul-teste.appspot.com",
-            messagingSenderId: "650943607449",
-            appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
-            measurementId: "G-KJHFXFLJ6K"
-        });
-        const __app_id = "mercosul-line";
-    </script>
-    <script type="module" src="js/portal.js"></script>
+  <script>
+    const __firebase_config = JSON.stringify({
+      apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
+      authDomain: "mercosul-teste.firebaseapp.com",
+      projectId: "mercosul-teste",
+      storageBucket: "mercosul-teste.appspot.com",
+      messagingSenderId: "650943607449",
+      appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
+      measurementId: "G-KJHFXFLJ6K"
+    });
+    const __app_id = "mercosul-line";
+  </script>
+  <script type="module" src="js/portal.js"></script>
 </body>
 </html>

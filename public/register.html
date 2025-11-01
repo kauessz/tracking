@@ -6,43 +6,44 @@
   <title>Registo de Utilizador</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="./css/style.css">
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col">
-
-  <header class="bg-blue-900 text-white p-4 text-center font-bold text-xl shadow-lg">
-    Solicitação de Acesso
+<body class="bg-gray-100 min-h-screen flex flex-col">
+  <header class="topbar">
+    <div class="page-wrap font-bold text-xl">Solicitação de Acesso</div>
   </header>
 
-  <main class="flex-grow p-6 max-w-md mx-auto w-full flex items-center">
-    <section class="w-full bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
-      <h2 class="text-2xl font-bold mb-6 text-center">Criar Nova Conta</h2>
-      
-      <label for="register-email" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Email</label>
-      <input type="email" id="register-email" placeholder="seu-email@exemplo.com" class="w-full px-4 py-2 border rounded mt-1 mb-4 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-      
-      <label for="register-password" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Senha</label>
-      <input type="password" id="register-password" placeholder="Mínimo de 6 caracteres" class="w-full px-4 py-2 border rounded mt-1 mb-4 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+  <main class="page-wrap flex-grow w-full max-w-2xl">
+    <section class="card">
+      <div class="card-body">
+        <h2 class="text-2xl font-bold mb-6 text-center">Criar Nova Conta</h2>
 
-      <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Tipo de Conta</label>
-      <div class="mt-2 flex rounded-md shadow-sm">
-        <div class="relative flex items-stretch flex-grow focus-within:z-10">
-          <input type="radio" name="account_type" id="type_internal" value="internal" class="hidden peer" checked>
-          <label for="type_internal" class="w-full text-center border border-gray-300 dark:border-gray-600 rounded-l-md p-2 text-sm peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 cursor-pointer">Funcionário Interno</label>
-        </div>
-        <div class="relative flex items-stretch -ml-px flex-grow focus-within:z-10">
-          <input type="radio" name="account_type" id="type_shipper" value="shipper" class="hidden peer">
-          <label for="type_shipper" class="w-full text-center border border-gray-300 dark:border-gray-600 rounded-r-md p-2 text-sm peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600 cursor-pointer">Cliente / Embarcador</label>
-        </div>
-      </div>
-      
-      <p id="register-error" class="text-red-500 text-sm hidden mt-4"></p>
-      <p id="register-success" class="text-green-500 text-sm hidden mt-4"></p>
-      
-      <button id="register-button" class="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded w-full mt-6">Solicitar Acesso</button>
+        <label for="register-email" class="block text-sm font-medium text-gray-700">Email</label>
+        <input type="email" id="register-email" placeholder="seu-email@exemplo.com" class="w-full px-4 py-2 border rounded mt-1 mb-4">
 
-      <div class="text-center mt-6">
-        <a href="index.html" class="text-sm text-blue-600 hover:underline dark:text-blue-400">&larr; Voltar para o Login</a>
+        <label for="register-password" class="block text-sm font-medium text-gray-700">Senha</label>
+        <input type="password" id="register-password" placeholder="Mínimo de 6 caracteres" class="w-full px-4 py-2 border rounded mt-1 mb-4">
+
+        <label class="block text-sm font-medium text-gray-700">Tipo de Conta</label>
+        <div class="mt-2 grid grid-cols-2 gap-2">
+          <label class="border rounded p-2 cursor-pointer text-center">
+            <input type="radio" name="account_type" id="type_internal" value="internal" class="mr-2" checked>
+            Funcionário Interno
+          </label>
+          <label class="border rounded p-2 cursor-pointer text-center">
+            <input type="radio" name="account_type" id="type_shipper" value="shipper" class="mr-2">
+            Cliente / Embarcador
+          </label>
+        </div>
+
+        <p id="register-error" class="text-red-500 text-sm hidden mt-4"></p>
+        <p id="register-success" class="text-green-600 text-sm hidden mt-4"></p>
+
+        <button id="register-button" class="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded w-full mt-6">Solicitar Acesso</button>
+
+        <div class="text-center mt-6">
+          <a href="index.html" class="text-sm text-blue-600 hover:underline">&larr; Voltar para o Login</a>
+        </div>
       </div>
     </section>
   </main>
@@ -53,15 +54,15 @@
 
   <script>
     const __firebase_config = JSON.stringify({
-        apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
-        authDomain: "mercosul-teste.firebaseapp.com",
-        projectId: "mercosul-teste",
-        storageBucket: "mercosul-teste.appspot.com",
-        messagingSenderId: "650943607449",
-        appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
-        measurementId: "G-KJHFXFLJ6K"
+      apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
+      authDomain: "mercosul-teste.firebaseapp.com",
+      projectId: "mercosul-teste",
+      storageBucket: "mercosul-teste.appspot.com",
+      messagingSenderId: "650943607449",
+      appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
+      measurementId: "G-KJHFXFLJ6K"
     });
   </script>
-  <script type="module" src="js/register.js"></script>
+  <script type="module" src="./js/register.js"></script>
 </body>
 </html>

@@ -1,134 +1,211 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Área Administrativa - Mercosul Line</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
-    <link rel="stylesheet" href="css/style.css">
-    <style>
-        .dark-mode .choices__inner{background-color:#4a5568;border-color:#718096;color:white}.dark-mode .choices__list--dropdown{background-color:#2d3748;border-color:#4a5568}.dark-mode .choices__item{background-color:#2d3748}.dark-mode .choices__item--choice{color:#e2e8f0}.dark-mode .choices__item.is-highlighted{background-color:#4a5568 !important}.dark-mode .choices__input{background-color:#4a5568 !important;color:white}.dark-mode .choices__item--selectable.is-highlighted{background-color:#1e3a8a}#delay-chart{cursor:pointer}.main-row{cursor:pointer}
-        .sortable-header { user-select: none; }
-        .sort-indicator { display: inline-block; width: 1em; text-align: center; }
-        .dashboard-card { cursor: pointer; transition: transform 0.2s; }
-        .dashboard-card:hover { transform: scale(1.03); }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Painel Administrativo - Mercosul Line</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+  <link rel="stylesheet" href="./css/style.css"/>
+
+  <style>
+    body{font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    /* ↑ aumentamos a largura útil */
+    .page-wrap{max-width:96rem}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 6px 18px rgba(17,24,39,.06);padding:16px}
+    .table th{font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;color:#6b7280}
+    .table td{font-size:.9rem;color:#111827}
+    .table tr:hover{background:#f9fafb}
+    .header-brand{background:#0b2263}
+    .kpi{border-radius:12px;padding:16px;color:#fff;display:flex;flex-direction:column;gap:.25rem;box-shadow:0 6px 18px rgba(17,24,39,.10)}
+    .kpi h3{font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;opacity:.9}
+    .kpi p{font-size:2rem;font-weight:800;line-height:1}
+    .kpi-blue{background:#1e3a8a}
+    .kpi-green{background:#166534}
+    .kpi-red{background:#7f1d1d}
+    .kpi-orange{background:#92400e}
+
+    /* -------- alinhamento consistente da tabela -------- */
+    .table{table-layout:fixed;width:100%}
+    .table th,.table td{
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;
+    }
+    .col-booking{  width:9rem;  }   /* ~144px */
+    .col-shipper{  width:18rem; }   /* ~288px */
+    .col-porto{    width:10rem; }   /* ~160px */
+    .col-previsao{ width:12rem; }   /* ~192px */
+    .col-exec{     width:12rem; }   /* ~192px */
+    .col-atraso{   width:7rem;  }   /* ~112px */
+  </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col">
+<body class="bg-white min-h-screen text-gray-900">
+  <header class="header-brand text-white px-6 py-4 shadow">
+    <div class="page-wrap mx-auto flex items-center justify-between">
+      <h1 class="font-bold text-xl">Painel Administrativo</h1>
+      <a id="logout-button" href="#" class="text-white/90 hover:text-white">Sair</a>
+    </div>
+  </header>
 
-    <header class="bg-blue-900 text-white p-4 flex justify-between items-center font-bold text-xl shadow-lg">
-        <span>Painel Administrativo</span>
-        <div>
-            <button id="toggle-dark" class="mr-4 px-2 py-1 bg-gray-700 text-sm rounded hover:bg-gray-600 transition-colors">Alternar Tema</button>
-            <a href="index.html" id="logout-button" class="text-sm text-white hover:underline">Sair</a>
+  <main class="px-5 sm:px-7 py-7">
+    <div class="page-wrap mx-auto space-y-9" id="main-view">
+
+      <!-- Aprovação de usuários -->
+      <section id="user-management-section" class="card hidden">
+        <h2 class="text-lg font-semibold mb-4">Aprovação de Novos Utilizadores</h2>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 table">
+            <thead>
+              <tr>
+                <th class="px-6 py-3 text-left">Email</th>
+                <th class="px-6 py-3 text-left">Associar a Embarcador / Função</th>
+                <th class="px-6 py-3 text-left">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="pending-users-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+          </table>
         </div>
-    </header>
+      </section>
 
-    <!-- ✅ VISTA PRINCIPAL (MAIN VIEW) -->
-    <main id="main-view" class="flex-grow p-6 w-full">
-        <section id="user-management-section" class="mb-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md max-w-7xl mx-auto hidden">
-            <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Aprovação de Novos Utilizadores</h2>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Associar a Embarcador / Função</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pending-users-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700"></tbody>
-                </table>
-            </div>
-        </section>
+      <!-- Upload / Limpar -->
+      <section id="admin-section" class="card">
+        <h2 class="text-lg font-semibold">Upload de Dados de Rastreamento</h2>
+        <p class="text-sm text-gray-600 mb-4">Selecione um Excel (.xlsx, .xls) para sincronizar.</p>
+        <input id="upload-file" type="file" accept=".xlsx,.xls"/>
+        <div id="upload-status" class="text-sm mt-2 text-gray-600"></div>
 
-        <section id="admin-section" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md max-w-3xl mx-auto">
-            <h2 class="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Upload de Dados de Rastreamento</h2>
-            <p class="text-gray-600 dark:text-gray-300 mb-4">Selecione um ficheiro Excel (.xlsx, .xls) para sincronizar a base de dados.</p>
-            <input type="file" id="upload-file" accept=".xlsx, .xls" class="w-full text-gray-700 dark:text-gray-200">
-            <div id="upload-status" class="text-sm mt-2 text-gray-600 dark:text-gray-400"></div>
-        </section>
+        <hr class="my-6">
 
-        <section id="data-management-section" class="mt-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md max-w-3xl mx-auto">
-            <h2 class="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Gestão de Dados</h2>
-            <p class="text-gray-600 dark:text-gray-300 mb-4">Use este botão para limpar todas as programações existentes. Esta ação é irreversível.</p>
-            <button id="clear-data-btn" class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-4 rounded">
-                Limpar Dados
-            </button>
-        </section>
+        <h3 class="text-base font-semibold mb-2">Gestão de Dados</h3>
+        <p class="text-sm text-gray-600 mb-3">Use para limpar todas as programações existentes (irreversível).</p>
+        <!-- ID corrigido para bater com admin.js -->
+        <button id="clear-data-btn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded">
+          Limpar Dados
+        </button>
+      </section>
 
-        <section id="reports-section" class="mt-8 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md w-full max-w-7xl mx-auto">
-            <h2 class="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Análise de Operações</h2>
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 p-4 border rounded-lg bg-gray-50 dark:bg-gray-700">
-                <div><label for="filter-embarcador" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Embarcador / Cliente</label><select id="filter-embarcador" multiple></select></div>
-                <div><label for="filter-booking" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Booking</label><input type="text" id="filter-booking" placeholder="Filtrar por booking..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white dark:placeholder-gray-400"></div>
-                <div><label for="filter-date" class="block text-sm font-medium text-gray-700 dark:text-gray-200">Dia da Programação</label><input type="date" id="filter-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-600 dark:border-gray-500 dark:text-white"></div>
-                <div><label class="block text-sm font-medium text-transparent dark:text-transparent">&nbsp;</label><button id="clear-filters" class="mt-1 w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-md transition-colors">Limpar Filtros</button></div>
-                <!-- ✅ NOVO BOTÃO DE EXPORTAR -->
-                <div><label class="block text-sm font-medium text-transparent dark:text-transparent">&nbsp;</label><button id="export-excel-btn" class="mt-1 w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md transition-colors">Exportar Excel</button></div>
-            </div>
-            <div id="dashboard" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div id="total-ops-card" class="dashboard-card bg-blue-100 dark:bg-blue-900 p-4 rounded-lg shadow"><h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">Total de Operações</h3><p id="total-ops" class="text-3xl font-bold text-blue-900 dark:text-blue-100">0</p></div>
-                <div id="on-time-ops-card" class="dashboard-card bg-green-100 dark:bg-green-900 p-4 rounded-lg shadow"><h3 class="text-sm font-medium text-green-800 dark:text-green-200">Operações On Time</h3><p id="on-time-ops" class="text-3xl font-bold text-green-900 dark:text-green-100">0</p></div>
-                <div id="delayed-ops-card" class="dashboard-card bg-red-100 dark:bg-red-900 p-4 rounded-lg shadow"><h3 class="text-sm font-medium text-red-800 dark:text-red-200">Operações com Atraso</h3><p id="delayed-ops" class="text-3xl font-bold text-red-900 dark:text-red-100">0</p></div>
-                <div class="bg-yellow-100 dark:bg-yellow-900 p-4 rounded-lg shadow"><h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">Percentual de Atraso</h3><p id="delayed-ops-pct" class="text-3xl font-bold text-yellow-900 dark:text-yellow-100">0%</p></div>
-            </div>
-            <div class="mb-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-700"><h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-2">Maiores Ofensores (Qtd. Processos com Atraso)</h3><canvas id="delay-chart"></canvas></div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead id="results-table-head" class="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                            <th scope="col" data-sort="Booking" class="sortable-header cursor-pointer px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Booking<span class="sort-indicator"></span></th>
-                            <th scope="col" data-sort="Cliente" class="sortable-header cursor-pointer px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Embarcador<span class="sort-indicator"></span></th>
-                            <th scope="col" data-sort="PortoOperacao" class="sortable-header cursor-pointer px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Porto<span class="sort-indicator"></span></th>
-                            <th scope="col" data-sort="DataProgramada" class="sortable-header cursor-pointer px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Previsão Início<span class="sort-indicator"></span></th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Início Execução</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Atraso (HH:MM)</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Motivo do Atraso</th>
-                        </tr>
-                    </thead>
-                    <tbody id="results-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700"></tbody>
-                </table>
-            </div>
-        </section>
-    </main>
+      <!-- Filtros, KPIs e Tabelas -->
+      <section id="data-management-section" class="card">
+        <h2 class="text-lg font-semibold mb-2">Gestão de Dados</h2>
+        <p class="text-sm text-gray-600 mb-4">Filtre para analisar operações, atrasos e motivos (sem transportadora).</p>
 
-    <!-- ✅ NOVA VISTA DE DETALHES (INICIALMENTE ESCONDIDA) -->
-    <div id="details-screen" class="hidden flex-grow p-6 w-full">
-        <div class="w-full max-w-7xl mx-auto bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-            <div class="flex justify-between items-center mb-4">
-                <h2 id="details-title" class="text-2xl font-semibold text-gray-900 dark:text-white">Detalhes da Operação</h2>
-                <button id="details-back-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors">&larr; Voltar ao Painel</button>
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium mb-1" for="filter-embarcador">Embarcador</label>
+            <select id="filter-embarcador" multiple></select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1" for="filter-booking">Booking</label>
+            <input id="filter-booking" type="text" placeholder="Buscar por Booking/Container/Porto" class="w-full border rounded px-3 py-2">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1" for="filter-date">Data Programada</label>
+            <input id="filter-date" type="date" class="w-full border rounded px-3 py-2">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1 invisible">.</label>
+            <button id="clear-filters" class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">Limpar filtros</button>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1 invisible">.</label>
+            <button id="export-excel" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Exportar Excel</button>
+          </div>
+
+          <div class="md:col-span-2 flex flex-col gap-2">
+            <label class="block text-sm font-medium mb-1">Ações</label>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <button id="send-email-btn" class="flex-1 bg-blue-700 hover:bg-blue-800 text-white font-semibold px-4 py-2 rounded">
+                Enviar e-mail ao cliente (sem API integrada)
+              </button>
+              <button id="compose-email-btn" class="flex-1 bg-blue-600/90 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded">
+                Criar e-mail
+              </button>
             </div>
-            <div id="details-table-container" class="overflow-x-auto">
-                <!-- A tabela de detalhes será renderizada aqui pelo JavaScript -->
-            </div>
+          </div>
         </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div id="total-ops-card" class="kpi kpi-blue cursor-pointer"><h3>Total de Operações</h3><p id="total-ops">0</p></div>
+          <div id="on-time-ops-card" class="kpi kpi-green cursor-pointer"><h3>Operações On Time</h3><p id="on-time-ops">0</p></div>
+          <div id="delayed-ops-card" class="kpi kpi-red cursor-pointer"><h3>Operações com Atraso</h3><p id="delayed-ops">0</p></div>
+          <div class="kpi kpi-orange"><h3>Percentual de Atraso</h3><p id="delayed-ops-pct">0%</p></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div class="card">
+            <h3 class="text-lg font-semibold mb-2">Maiores Ofensores (Processos com Atraso)</h3>
+            <div class="h-80"><canvas id="delay-chart"></canvas></div>
+          </div>
+          <div class="card">
+            <h3 class="text-lg font-semibold mb-2">Top Motivos de Atraso</h3>
+            <div class="h-80"><canvas id="reasons-chart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 table">
+            <thead id="results-table-head" class="bg-white">
+              <tr>
+                <th data-sort="Booking"         class="px-6 py-3 text-left sortable-header col-booking">Booking <span class="sort-indicator"></span></th>
+                <th data-sort="Cliente"         class="px-6 py-3 text-left sortable-header col-shipper">Embarcador <span class="sort-indicator"></span></th>
+                <th data-sort="PortoOperacao"   class="px-6 py-3 text-left sortable-header col-porto">Porto <span class="sort-indicator"></span></th>
+                <th data-sort="DataProgramada"  class="px-6 py-3 text-left sortable-header col-previsao">Previsão Início <span class="sort-indicator"></span></th>
+                <th data-sort="DataChegada"     class="px-6 py-3 text-left sortable-header col-exec">Início Execução <span class="sort-indicator"></span></th>
+                <th                              class="px-6 py-3 text-center col-atraso">Atraso</th>
+                <th                              class="px-6 py-3 text-left">Motivo do Atraso</th>
+              </tr>
+            </thead>
+            <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+          </table>
+        </div>
+      </section>
     </div>
 
-    <div id="client-detail-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden items-center justify-center p-4">
-        <!-- O conteúdo do modal permanece o mesmo -->
-    </div>
+    <!-- Detalhes -->
+    <section id="details-view" class="page-wrap mx-auto card hidden mt-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 id="details-title" class="text-lg font-semibold">Detalhes</h2>
+        <button id="details-back-btn" type="button" class="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded">
+          &larr; Voltar ao Painel
+        </button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 table">
+          <thead class="bg-white">
+            <tr>
+              <th class="px-6 py-3 text-left">Booking</th>
+              <th class="px-6 py-3 text-left">Embarcador</th>
+              <th class="px-6 py-3 text-left">Porto</th>
+              <th class="px-6 py-3 text-left">Previsão Início</th>
+              <th class="px-6 py-3 text-left">Início Execução</th>
+              <th class="px-6 py-3 text-left">Atraso</th>
+              <th class="px-6 py-3 text-left">Motivo</th>
+            </tr>
+          </thead>
+          <tbody id="details-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
 
-    <footer class="bg-gray-800 text-white text-center p-4 text-sm">&copy; 2025 Painel Administrativo</footer>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
-    <script>
-        const __firebase_config = JSON.stringify({
-            apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
-            authDomain: "mercosul-teste.firebaseapp.com",
-            projectId: "mercosul-teste",
-            storageBucket: "mercosul-teste.appspot.com",
-            messagingSenderId: "650943607449",
-            appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
-            measurementId: "G-KJHFXFLJ6K"
-        });
-        const __app_id = "mercosul-line";
-    </script>
-    <script type="module" src="js/admin.js"></script>
+  <!-- XLSX UMD opcional; admin.js carrega dinamicamente se faltar -->
+  <script id="xlsx-lib" src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+  <script>
+    const __firebase_config = JSON.stringify({
+      apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
+      authDomain: "mercosul-teste.firebaseapp.com",
+      projectId: "mercosul-teste",
+      storageBucket: "mercosul-teste.appspot.com",
+      messagingSenderId: "650943607449",
+      appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
+      measurementId: "G-KJHFXFLJ6K"
+    });
+  </script>
+
+  <script type="module" src="./js/admin.js"></script>
 </body>
 </html>

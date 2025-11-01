@@ -1,329 +1,596 @@
-// --- Módulos Principais ---
+// --- Módulos Firebase ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, query, where, getDocs, updateDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import {
+  getFirestore, doc, setDoc, onSnapshot, collection, query, where,
+  getDocs, getDoc, updateDoc
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// --- Módulos da Aplicação ---
-import { initializeUI, renderData, populateClientFilter, getFilters, clearFilters, showDetailsScreen } from './ui.js';
-import { formatDate, parseDate, calculateDelayInMinutes, formatMinutesToHHMM } from './utils.js';
+// --- UI/Utils ---
+import {
+  initializeUI, renderData, populateClientFilter, getFilters,
+  clearFilters, showDetailsScreen
+} from "./ui.js";
+import {
+  formatDateForDisplay,
+  parseDate,
+  calculateDelayInMinutes,
+  formatMinutesToHHMM
+} from "./utils.js";
 
-// --- Estado Global ---
+/* ------------------------------------------------------------------ */
+/* ESTADO GLOBAL                                                       */
+/* ------------------------------------------------------------------ */
 let allData = [];
 let currentlyDisplayedData = [];
 
-// --- Lógica de Gestão de Utilizadores (sem alterações) ---
+/* ------------------------------------------------------------------ */
+/* NORMALIZAÇÃO                                                        */
+/* ------------------------------------------------------------------ */
+
+// pega primeiro valor existente dentro de uma lista de chaves
+const by = (row, keys) => {
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k];
+  }
+  return undefined;
+};
+
+const pickCPFfromRow = (row) =>
+  row?.["CPF motorista programado"] ??
+  row?.["CPF Motorista Programado"] ??
+  row?.["CPF_Motorista_Programado"] ??
+  row?.["CPF Motorista"] ??
+  row?.CPFMotorista ??
+  row?.CpfMotorista ??
+  row?.CPF ??
+  row?.Cpf ??
+  null;
+
+/** Normaliza uma linha vinda da planilha para o nosso schema */
+const normalizeRowKeys = (r) => {
+  const clean = (v) => (v ?? "").toString().trim();
+
+  const out = { ...r };
+
+  // ---------- Chaves principais ----------
+  out.NumeroProgramacao =
+    out.NumeroProgramacao ??
+    clean(by(r, ["Número da programação", "Numero da Programacao", "Nº Programação", "Nº Prog."]));
+
+  out.Booking = out.Booking ?? clean(by(r, ["Booking", "Booking "]));
+  out.Container = out.Container ?? clean(by(r, ["Containers", "Container"]));
+
+  // Embarcador (vira Cliente no app)
+  out.Cliente = out.Cliente ?? clean(by(r, ["Embarcador", "Cliente"]));
+  out.NumeroCliente = out.NumeroCliente ?? clean(by(r, ["Número cliente", "Numero cliente", "Nº Cliente"]));
+
+  // Datas (mantemos como string/número; utils.parseDate trata os casos)
+  out.DataProgramada =
+    out.DataProgramada ??
+    by(r, ["Previsão início atendimento (BRA)", "Previsao inicio atendimento (BRA)", "Previsão Início", "Previsao Inicio"]);
+
+  out.DataChegada =
+    out.DataChegada ??
+    by(r, ["Dt Início da Execução (BRA)", "Dt Inicio da Execucao (BRA)", "Início Execução", "Inicio Execucao"]);
+
+  out.DataSaida =
+    out.DataSaida ??
+    by(r, ["Dt FIM da Execução (BRA)", "Dt Fim da Execucao (BRA)", "Fim Execução", "Fim Execucao"]);
+
+  out.DataPrevisaoEntregaRecalculada =
+    out.DataPrevisaoEntregaRecalculada ??
+    by(r, ["Data de previsão de entrega recalculada (BRA)", "Data de previsao de entrega recalculada (BRA)"]);
+
+  // Diversos
+  out.TipoProgramacao =
+    out.TipoProgramacao ??
+    clean(by(r, ["Tipo de programação", "Tipo Programação", "Tipo"]));
+
+  out.SituacaoProgramacao =
+    out.SituacaoProgramacao ??
+    clean(by(r, ["Situação programação", "Situacao programacao", "Situação", "Situacao"]));
+
+  out.SituacaoPrazoProgramacao =
+    out.SituacaoPrazoProgramacao ??
+    clean(by(r, ["Situação prazo programação", "Situacao prazo programacao"]));
+
+  out.Transportadora = out.Transportadora ?? clean(by(r, ["Transportadora"]));
+  out.JustificativaAtraso = out.JustificativaAtraso ?? clean(by(r, ["Justificativa de atraso de programação", "Justificativa de atraso"]));
+
+  out.CidadeDescarga =
+    out.CidadeDescarga ??
+    clean(by(r, ["Cidade local de atendimento", "Cidade", "Cidade Descarga"]));
+
+  out.NomeLocalAtendimento = out.NomeLocalAtendimento ?? clean(by(r, ["Nome local de atendimento"]));
+
+  // Motorista / veículos
+  out.NomeMotoristaProgramado =
+    out.NomeMotoristaProgramado ??
+    clean(by(r, ["Nome do motorista programado", "Nome Motorista Programado", "Nome Motorista", "Motorista"]));
+
+  const cpf = pickCPFfromRow(r);
+  if (cpf) out.CpfMotorista = String(cpf).replace(/[^\d]/g, "");
+
+  out.PlacaVeiculo = out.PlacaVeiculo ?? clean(by(r, ["Placa do veículo", "Placa do veiculo"]));
+  out.PlacaCarreta1 = out.PlacaCarreta1 ?? clean(by(r, ["Placa da carreta 1"]));
+  out.PlacaCarreta2 = out.PlacaCarreta2 ?? clean(by(r, ["Placa da carreta 2"]));
+
+  // POL / POD
+  out.POL = out.POL ?? clean(by(r, ["POL", "Pol", "Porto Origem"]));
+  out.POD = out.POD ?? clean(by(r, ["POD", "Pod", "Porto Destino"]));
+
+  // Porto da Operação (coleta => POL, entrega => POD, senão primeiro disponível)
+  if (!out.PortoOperacao) {
+    const tipo = clean(out.TipoProgramacao).toLowerCase();
+    const pol = clean(out.POL);
+    const pod = clean(out.POD);
+    if (tipo.includes("coleta")) out.PortoOperacao = pol || pod || "";
+    else if (tipo.includes("entrega")) out.PortoOperacao = pod || pol || "";
+    else out.PortoOperacao = pol || pod || "";
+  }
+
+  for (const k of Object.keys(out)) {
+    if (out[k] === undefined) out[k] = null;
+  }
+  return out;
+};
+
+/* ------------------------------------------------------------------ */
+/* APROVAÇÃO DE USUÁRIOS (igual ao anterior)                          */
+/* ------------------------------------------------------------------ */
 const updateUserStatus = async (db, uid, newStatus, details = {}) => {
+  try {
     const userDocRef = doc(db, "users", uid);
-    try {
-        const updateData = { status: newStatus };
-        if (newStatus === 'approved') {
-            if (details.role) updateData.role = details.role;
-            if (details.associatedShipper) {
-                updateData.associatedShipper = details.associatedShipper;
-                updateData.role = 'embarcador';
-            }
-        }
-        await updateDoc(userDocRef, updateData);
-        displayPendingUsers(db);
-    } catch (error) {
-        console.error("Erro ao atualizar o estado do utilizador:", error);
-    }
+    const updateData = { status: newStatus, ...details };
+    await updateDoc(userDocRef, updateData);
+    displayPendingUsers(db);
+  } catch (error) {
+    console.error("Erro ao atualizar o estado do utilizador:", error);
+  }
 };
 
 const displayPendingUsers = async (db) => {
-    const tableBody = document.getElementById('pending-users-table-body');
-    const q = query(collection(db, "users"), where("status", "==", "pending"));
-    const querySnapshot = await getDocs(q);
-    const uniqueShippers = [...new Set(allData.map(item => item.Cliente).filter(Boolean))].sort();
-    tableBody.innerHTML = '';
-    if (querySnapshot.empty) {
-        tableBody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Nenhum pedido de registo pendente.</td></tr>';
-        return;
-    }
-    querySnapshot.forEach((doc) => {
-        const user = doc.data();
-        const uid = doc.id;
-        let optionsHtml = '';
-        if (user.accountType === 'shipper') {
-            const shipperOptions = uniqueShippers.map(shipper => `<option value="${shipper}">${shipper}</option>`).join('');
-            optionsHtml = `<select class="approval-details w-full rounded-md border-gray-300 dark:bg-gray-600" data-type="shipper" data-uid="${uid}"><option value="">Selecione um embarcador...</option>${shipperOptions}</select>`;
-        } else {
-            optionsHtml = `<select class="approval-details w-full rounded-md border-gray-300 dark:bg-gray-600" data-type="internal" data-uid="${uid}"><option value="user">Utilizador (Funcionário)</option><option value="admin">Administrador</option></select>`;
-        }
-        const row = document.createElement('tr');
-        row.innerHTML = `<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${user.email}</td><td class="px-6 py-4">${optionsHtml}</td><td class="px-6 py-4 whitespace-nowrap text-sm font-medium"><button data-uid="${uid}" class="approve-btn text-green-600 hover:text-green-900 mr-4">Aprovar</button><button data-uid="${uid}" class="reject-btn text-red-600 hover:text-red-900">Rejeitar</button></td>`;
-        tableBody.appendChild(row);
+  const tableBody = document.getElementById("pending-users-table-body");
+  if (!tableBody) return;
+
+  const q = query(collection(db, "users"), where("status", "==", "pending"));
+  const querySnapshot = await getDocs(q);
+
+  const uniqueShippers = [...new Set(allData.map(i => i.Cliente).filter(Boolean))].sort();
+
+  tableBody.innerHTML = "";
+  if (querySnapshot.empty) {
+    tableBody.innerHTML =
+      '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Nenhum pedido de registo pendente.</td></tr>';
+    return;
+  }
+
+  querySnapshot.forEach((snap) => {
+    const user = snap.data();
+    const tr = document.createElement("tr");
+
+    const tdEmail = document.createElement("td");
+    tdEmail.className = "px-6 py-4 text-sm";
+    tdEmail.textContent = user.email || "";
+    tr.appendChild(tdEmail);
+
+    const tdSelect = document.createElement("td");
+    tdSelect.className = "px-6 py-4 text-sm";
+
+    const shipperSelect = document.createElement("select");
+    shipperSelect.className = "border rounded px-2 py-1 mr-2";
+    const roleSelect = document.createElement("select");
+    roleSelect.className = "border rounded px-2 py-1";
+
+    const def = document.createElement("option");
+    def.value = "";
+    def.textContent = "Selecionar Embarcador";
+    shipperSelect.appendChild(def);
+    uniqueShippers.forEach((s) => {
+      const o = document.createElement("option");
+      o.value = s;
+      o.textContent = s;
+      shipperSelect.appendChild(o);
     });
-    document.querySelectorAll('.approve-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const uid = e.target.dataset.uid;
-            const select = document.querySelector(`.approval-details[data-uid="${uid}"]`);
-            if (!select.value) { alert('Por favor, selecione uma opção para aprovar o utilizador.'); return; }
-            const details = {};
-            if (select.dataset.type === 'shipper') details.associatedShipper = select.value;
-            else details.role = select.value;
-            updateUserStatus(db, uid, 'approved', details);
-        });
+
+    ["embarcador", "admin"].forEach((r) => {
+      const o = document.createElement("option");
+      o.value = r;
+      o.textContent = r;
+      roleSelect.appendChild(o);
     });
-    document.querySelectorAll('.reject-btn').forEach(button => {
-        button.addEventListener('click', (e) => updateUserStatus(db, e.target.dataset.uid, 'rejected'));
-    });
+
+    tdSelect.appendChild(shipperSelect);
+    tdSelect.appendChild(roleSelect);
+    tr.appendChild(tdSelect);
+
+    const tdActions = document.createElement("td");
+    tdActions.className = "px-6 py-4 text-sm";
+
+    const approve = document.createElement("button");
+    approve.className = "bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded mr-2";
+    approve.textContent = "Aprovar";
+    approve.onclick = async () => {
+      if (!shipperSelect.value || !roleSelect.value)
+        return alert("Selecione um embarcador e uma função.");
+      await updateUserStatus(db, snap.id, "approved", {
+        associatedShipper: shipperSelect.value,
+        role: roleSelect.value,
+      });
+    };
+
+    const reject = document.createElement("button");
+    reject.className = "bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded";
+    reject.textContent = "Rejeitar";
+    reject.onclick = async () => {
+      await updateUserStatus(db, snap.id, "rejected");
+    };
+
+    tdActions.appendChild(approve);
+    tdActions.appendChild(reject);
+    tr.appendChild(tdActions);
+
+    tableBody.appendChild(tr);
+  });
 };
 
-// --- Lógica de Negócio ---
-const applyFiltersAndRender = () => {
-    const filters = getFilters();
-    let filteredData = allData.filter(r => !r.SituacaoProgramacao?.toLowerCase().includes('cancelada'));
-    if (filters.clients.length > 0) {
-        filteredData = filteredData.filter(r => r.Cliente && filters.clients.includes(r.Cliente));
-    }
-    if (filters.booking) {
-        filteredData = filteredData.filter(r => r.Booking && r.Booking.toLowerCase().includes(filters.booking));
-    }
-    if (filters.date) {
-        filteredData = filteredData.filter(r => {
-            if (!r.DataProgramada) return false;
-            const recordDate = parseDate(r.DataProgramada);
-            if (!recordDate) return false;
-            const recordDateString = recordDate.toISOString().split('T')[0];
-            return recordDateString === filters.date;
-        });
-    }
-    currentlyDisplayedData = filteredData;
-    renderData(filteredData, allData);
+/* ------------------------------------------------------------------ */
+/* UPLOAD/LIMPAR                                                       */
+/* ------------------------------------------------------------------ */
+const ensureXLSX = async () => {
+  if (window.XLSX) return window.XLSX;
+
+  for (let i = 0; i < 20; i++) {
+    if (window.XLSX) return window.XLSX;
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  const tryLoad = (url) => new Promise((resolve) => {
+    const prev = document.getElementById("xlsx-lib");
+    if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+
+    const s = document.createElement("script");
+    s.id = "xlsx-lib";
+    s.src = url;
+    s.async = true;
+    s.crossOrigin = "anonymous";
+    document.head.appendChild(s);
+
+    const timeout = setTimeout(() => resolve(null), 5000);
+    s.onload = () => { clearTimeout(timeout); resolve(window.XLSX || null); };
+    s.onerror = () => { clearTimeout(timeout); resolve(null); };
+  });
+
+  let lib = await tryLoad("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.full.min.js");
+  if (!lib) lib = await tryLoad("https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js");
+
+  return lib;
 };
 
-const handleDashboardClick = (filterType) => {
-    // ✅ CORREÇÃO: Usa os dados atualmente na tela (currentlyDisplayedData) como base.
-    const baseData = currentlyDisplayedData;
-    let dataToRender = baseData;
-    let title = "Detalhes das Operações (Filtro Ativo)";
-
-    if (filterType === 'onTime') {
-        dataToRender = baseData.filter(r => calculateDelayInMinutes(r) <= 0);
-        title = "Detalhes - Operações On Time (Filtro Ativo)";
-    } else if (filterType === 'delayed') {
-        dataToRender = baseData.filter(r => calculateDelayInMinutes(r) > 0);
-        title = "Detalhes - Operações com Atraso (Filtro Ativo)";
+// Remove/normaliza qualquer undefined (profundamente)
+const stripUndefinedDeep = (val) => {
+  if (Array.isArray(val)) {
+    // normaliza cada item e remove itens 100% undefined
+    return val.map(stripUndefinedDeep).filter(v => v !== undefined);
+  }
+  if (val && typeof val === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(val)) {
+      const sv = stripUndefinedDeep(v);
+      if (sv !== undefined) out[k] = sv; // não escreve chaves undefined
     }
-    
-    // A função não limpa mais os filtros, preservando o estado da UI.
-    showDetailsScreen(dataToRender, title);
-};
-
-const exportToExcel = () => {
-    const dataToExport = currentlyDisplayedData.map(record => ({
-        'Booking': record.Booking || 'N/A',
-        'Cliente': record.Cliente || 'N/A',
-        'Porto': record.PortoOperacao || 'N/A',
-        'Previsão Início': record.DataProgramada || 'N/A',
-        'Início Execução': record.DataChegada || 'N/A',
-        'Fim Execução': record.DataSaida || 'N/A',
-        'Atraso (HH:MM)': formatMinutesToHHMM(calculateDelayInMinutes(record)),
-        'Motivo do Atraso': record.JustificativaAtraso || 'N/A',
-        'Container': record.Container || 'N/A',
-        'Tipo Programação': record.TipoProgramacao || 'N/A',
-        'Transportadora': record.Transportadora || 'N/A'
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "RelatorioOperacoes");
-
-    const today = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `Relatorio_Operacoes_${today}.xlsx`);
+    return out;
+  }
+  // em folhas: converte undefined -> null (Firestore permite null)
+  return val === undefined ? null : val;
 };
 
 const handleFileUpload = async (event, db, dataRef) => {
-    const uploadInput = document.getElementById('upload-file');
-    const uploadStatus = document.getElementById('upload-status');
-    const file = event.target.files[0];
-    if (!file) return;
+  const input = event.target;
+  const file = input.files && input.files[0];
+  const statusEl = document.getElementById("upload-status");
+  const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
 
-    uploadStatus.textContent = 'A ler o ficheiro...';
-    
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            uploadStatus.textContent = 'A processar dados...';
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const excelData = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+  if (!file) { setStatus("Nenhum ficheiro selecionado."); return; }
 
-            if (excelData.length < 2) throw new Error("A planilha está vazia.");
-            const headers = excelData[0].map(h => String(h).trim().toLowerCase());
-            const dataRows = excelData.slice(1);
+  try {
+    setStatus("Carregando biblioteca XLSX...");
+    const XLSX = await ensureXLSX();
+    if (!XLSX) throw new Error("Falha ao carregar a biblioteca XLSX (CDN bloqueada?).");
 
-            const headerMap = {
-                TipoProgramacao: ['tipo de programação'],
-                Embarcador: ['embarcador'],
-                Booking: ['booking'],
-                Containers: ['containers'],
-                PrevisaoInicioAtendimento: ['previsão início atendimento (bra)'],
-                DtInicioExecucao: ['dt início da execução (bra)'],
-                DtFimExecucao: ['dt fim da execução (bra)'],
-                DataPrevisaoEntregaRecalculada: ['data de previsão de entrega recalculada (bra)'],
-                NomeMotoristaProgramado: ['nome do motorista programado'],
-                PlacaVeiculo: ['placa do veículo'],
-                PlacaCarreta1: ['placa da carreta 1'],
-                JustificativaAtrasoProgramacao: ['justificativa de atraso de programação'],
-                Transportadora: ['transportadora'],
-                NumeroProgramacao: ['número da programação'],
-                NumeroCliente: ['número cliente'],
-                SituacaoProgramacao: ['situação programação'],
-                CidadeDescarga: ['cidade de descarga', 'cidade local de atendimento'],
-                POL: ['pol'],
-                POD: ['pod']
-            };
+    setStatus(`Lendo arquivo: ${file.name} ...`);
+    const buffer = await file.arrayBuffer();
 
-            const columnIndexMap = {};
-            for (const key in headerMap) {
-                for (const possibleName of headerMap[key]) {
-                    const index = headers.indexOf(possibleName);
-                    if (index !== -1) {
-                        columnIndexMap[key] = index;
-                        break;
-                    }
-                }
-            }
+    setStatus("Processando planilha...");
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+    const sheetName = workbook.SheetNames?.[0];
+    const sheet = sheetName ? workbook.Sheets[sheetName] : null;
+    if (!sheet) throw new Error("Planilha vazia ou inválida.");
 
-            if (columnIndexMap.Booking === undefined) throw new Error('A coluna "Booking" é obrigatória e não foi encontrada.');
+    const rawRows = XLSX.utils.sheet_to_json(sheet);
+    if (!Array.isArray(rawRows) || rawRows.length === 0)
+      throw new Error("Nenhuma linha encontrada na planilha.");
 
-            const newRecords = dataRows.filter(r => r && r[columnIndexMap.Booking]).map(r => {
-                const row = {};
-                for (const key in headerMap) {
-                    if (key === 'POL' || key === 'POD') continue;
+    // normaliza cada linha
+    const normRows = rawRows.map(normalizeRowKeys)
+      // descartamos linhas totalmente vazias (sem nº programação e sem booking/container)
+      .filter(r => {
+        const hasKey = (r.NumeroProgramacao && r.NumeroProgramacao !== "") ||
+          (r.Booking && r.Booking !== "") ||
+          (r.Container && r.Container !== "");
+        return hasKey;
+      });
 
-                    const index = columnIndexMap[key];
-                    let value = index !== undefined ? r[index] : '';
-                    
-                    const keyMap = {
-                        Embarcador: "Cliente",
-                        PrevisaoInicioAtendimento: "DataProgramada",
-                        DtInicioExecucao: "DataChegada",
-                        DtFimExecucao: "DataSaida",
-                        JustificativaAtrasoProgramacao: "JustificativaAtraso",
-                        Containers: "Container"
-                    };
-                    const finalKey = keyMap[key] || key;
-
-                    if (value instanceof Date) {
-                        value = formatDate(value);
-                    }
-                    row[finalKey] = value || '';
-                }
-
-                let porto = '';
-                const tipoProg = row.TipoProgramacao?.toLowerCase() || '';
-                if (tipoProg.includes('coleta')) {
-                    porto = columnIndexMap.POL !== undefined ? r[columnIndexMap.POL] : '';
-                } else if (tipoProg.includes('entrega')) {
-                    porto = columnIndexMap.POD !== undefined ? r[columnIndexMap.POD] : '';
-                }
-                row.PortoOperacao = porto || '';
-
-                return row;
-            });
-
-            uploadStatus.textContent = 'A sincronizar com a base de dados...';
-            
-            const existingDataMap = new Map();
-            allData.forEach(record => {
-                const uniqueId = `${record.Booking}-${record.Container}`;
-                existingDataMap.set(uniqueId, record);
-            });
-
-            newRecords.forEach(newRecord => {
-                const uniqueId = `${newRecord.Booking}-${newRecord.Container}`;
-                existingDataMap.set(uniqueId, newRecord);
-            });
-
-            const mergedData = Array.from(existingDataMap.values());
-
-            await setDoc(dataRef, { records: mergedData, lastUpdate: new Date() });
-            uploadStatus.textContent = `✅ Sincronização concluída! A base de dados tem agora ${mergedData.length} registos.`;
-
-        } catch (err) {
-            uploadStatus.textContent = `❌ Erro: ${err.message}`;
-        } finally {
-            setTimeout(() => { uploadInput.value = ''; }, 4000);
-        }
+    // chave principal = Número da programação; fallback = Booking-Container
+    const makeKey = (row) => {
+      const prog = (row.NumeroProgramacao || "").toString().trim();
+      if (prog) return `prog:${prog}`;
+      const b = (row.Booking || "").toString().trim();
+      const c = (row.Container || "").toString().trim();
+      return `bc:${b}-${c}`;
     };
-    reader.readAsArrayBuffer(file);
+
+    // dentro do arquivo, mesclamos registros com a mesma chave (último ganha)
+    const uploadMap = new Map();
+    normRows.forEach((r) => {
+      const k = makeKey(r);
+      uploadMap.set(k, { ...uploadMap.get(k), ...r });
+    });
+
+    setStatus("Mesclando com dados existentes...");
+    const snap = await getDoc(dataRef);
+    const existing = snap.exists() ? (snap.data().records || []) : [];
+
+    const finalMap = new Map();
+    // 1) carrega existentes normalizados
+    existing.forEach((r) => {
+      const nr = normalizeRowKeys(r);
+      finalMap.set(makeKey(nr), nr);
+    });
+    // 2) sobrescreve/insere com o que veio no upload
+    for (const [k, r] of uploadMap.entries()) {
+      const prev = finalMap.get(k) || {};
+      finalMap.set(k, { ...prev, ...r });
+    }
+
+    const finalRows = Array.from(finalMap.values());
+
+    const finalRowsClean = finalRows.map(stripUndefinedDeep);
+
+    setStatus("Gravando no Firestore...");
+    await setDoc(
+      dataRef,
+      { updatedAt: new Date().toISOString(), records: finalRowsClean },
+      { merge: true }
+    );
+
+    setStatus(`✅ Importados/atualizados ${uploadMap.size} registros. Total agora: ${finalRows.length}.`);
+    console.log("Upload concluído:", { atualizados: uploadMap.size, total: finalRows.length });
+  } catch (err) {
+    console.error("Falha no upload:", err);
+    setStatus(`❌ Erro no upload: ${err.message || err}`);
+  } finally {
+    try { input.value = ""; } catch (_) { }
+  }
 };
 
 const handleClearData = async (db, dataRef) => {
-    const confirmation = window.confirm("Tem a certeza de que quer apagar TODAS as programações? Esta ação é irreversível.");
-    if (confirmation) {
-        try {
-            await setDoc(dataRef, { records: [], lastUpdate: new Date() });
-            alert("Todos os dados de programação foram limpos com sucesso.");
-        } catch (error) {
-            console.error("Erro ao limpar os dados:", error);
-            alert("Ocorreu um erro ao tentar limpar os dados.");
-        }
-    }
+  if (!confirm("Tem certeza? Esta ação é irreversível.")) return;
+  await setDoc(
+    dataRef,
+    { updatedAt: new Date().toISOString(), records: [] },
+    { merge: true }
+  );
+  alert("Dados limpos com sucesso.");
 };
 
-// --- Ponto de Entrada Principal ---
-const initializeAdminPage = async (auth, db, user) => {
-    initializeUI(applyFiltersAndRender, handleDashboardClick);
-    const userDocRef = doc(db, "users", user.uid);
-    const userDoc = await getDoc(userDocRef);
-    const isAdmin = userDoc.exists() && userDoc.data().role === 'admin';
+/* ------------------------------------------------------------------ */
+/* FILTROS + RENDER                                                    */
+/* ------------------------------------------------------------------ */
+const norm = (s) => (s ?? "").toString().trim().toLowerCase();
 
-    if (isAdmin) {
-        document.getElementById('user-management-section').classList.remove('hidden');
-    }
+const applyFiltersAndRender = () => {
+  const { clients, booking, date } = getFilters();
 
-    const logoutButton = document.getElementById('logout-button');
-    logoutButton.addEventListener('click', () => signOut(auth).then(() => window.location.href = 'index.html'));
+  // remove operações Canceladas ANTES de qualquer cálculo/render
+  let filtered = [...allData].filter(
+    (r) => !norm(r.SituacaoProgramacao).includes("cancelada")
+  );
 
-    const uploadInput = document.getElementById('upload-file');
-    const dataRef = doc(db, 'tracking_data', 'latest');
-    uploadInput.addEventListener('change', (event) => handleFileUpload(event, db, dataRef));
-    
-    const clearDataBtn = document.getElementById('clear-data-btn');
-    if(clearDataBtn) {
-        clearDataBtn.addEventListener('click', () => handleClearData(db, dataRef));
-    }
-    
-    const exportBtn = document.getElementById('export-excel-btn');
-    if(exportBtn) {
-        exportBtn.addEventListener('click', exportToExcel);
-    }
+  if (clients.length) {
+    const set = new Set(clients.map(norm));
+    filtered = filtered.filter((r) => set.has(norm(r.Cliente)));
+  }
 
-    onSnapshot(dataRef, (docSnap) => {
-        if (docSnap.exists()) {
-            allData = docSnap.data().records || [];
-            currentlyDisplayedData = allData.filter(r => !r.SituacaoProgramacao?.toLowerCase().includes('cancelada'));
-            const validData = allData.filter(r => !r.SituacaoProgramacao?.toLowerCase().includes('cancelada'));
-            populateClientFilter(validData);
-            applyFiltersAndRender();
-            if (isAdmin) {
-                displayPendingUsers(db);
-            }
-        }
+  if (booking) {
+    const t = norm(booking);
+    filtered = filtered.filter(
+      (r) =>
+        norm(r.Booking).includes(t) ||
+        norm(r.Container).includes(t) ||
+        norm(r.PortoOperacao).includes(t)
+    );
+  }
+
+  if (date) {
+    filtered = filtered.filter((r) => {
+      if (!r.DataProgramada) return false;
+      const d = parseDate(r.DataProgramada);
+      return d && d.toISOString().slice(0, 10) === date;
     });
+  }
+
+  currentlyDisplayedData = filtered;
+  renderData(filtered, allData);
 };
 
-const checkAuth = () => {
-    try {
-        const config = JSON.parse(__firebase_config);
-        const app = initializeApp(config);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                initializeAdminPage(auth, db, user);
-            } else {
-                window.location.href = 'index.html';
-            }
-        });
-    } catch (error) {
-        console.error("Erro ao inicializar o Firebase:", error);
+const handleDashboardClick = (type) => {
+  if (type === "all") {
+    showDetailsScreen("Detalhes das Operações (Filtro Ativo)", currentlyDisplayedData);
+  } else if (type === "onTime") {
+    const ontime = currentlyDisplayedData.filter((r) => calculateDelayInMinutes(r) <= 0);
+    showDetailsScreen("Detalhes - Operações On Time (Filtro Ativo)", ontime);
+  } else if (type === "delayed") {
+    const delayed = currentlyDisplayedData.filter((r) => calculateDelayInMinutes(r) > 0);
+    showDetailsScreen("Detalhes - Operações com Atraso (Filtro Ativo)", delayed);
+  }
+};
+
+/* ------------------------------------------------------------------ */
+/* E-MAIL .EML (download)                                             */
+/* ------------------------------------------------------------------ */
+const downloadBlob = (name, blob) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
+const rowsToEmailTable = (rows) => {
+  const th = (t) => `<th style="border:1px solid #e5e7eb;padding:8px;background:#f9fafb;text-align:left">${t}</th>`;
+  const td = (t) => `<td style="border:1px solid #e5e7eb;padding:8px">${t ?? ""}</td>`;
+
+  const header =
+    `<tr>
+      ${th("Booking")}${th("Cliente")}${th("Container")}${th("Porto")}
+      ${th("Previsão Início")}${th("Início Execução")}${th("Atraso")}
+    </tr>`;
+
+  const body = rows.map(r => {
+    const m = calculateDelayInMinutes(r);
+    const atraso = (m ?? 0) > 0 ? formatMinutesToHHMM(m) : "ON TIME";
+    return `<tr>
+      ${td(r.Booking || "-")}${td(r.Cliente || "-")}${td(r.Container || "-")}${td(r.PortoOperacao || "-")}
+      ${td(formatDateForDisplay(r.DataProgramada) || "-")}
+      ${td(formatDateForDisplay(r.DataChegada) || "-")}
+      ${td(atraso)}
+    </tr>`;
+  }).join("");
+
+  return `<table style="border-collapse:collapse;width:100%;font-family:Inter,Arial,sans-serif;font-size:14px;margin:12px 0">
+            <thead>${header}</thead><tbody>${body}</tbody></table>`;
+};
+
+const generateDelayedEmailEML = () => {
+  const { clients } = getFilters();
+  const source = clients.length ? currentlyDisplayedData : allData;
+
+  const delayed = source.filter(r => (calculateDelayInMinutes(r) ?? 0) > 0);
+  if (!delayed.length) {
+    alert("Nenhuma operação atrasada para compor o e-mail.");
+    return;
+  }
+
+  let subjectClient = "Operações";
+  if (clients.length === 1) {
+    subjectClient = clients[0];
+  } else {
+    const uniq = [...new Set(delayed.map(r => r.Cliente).filter(Boolean))];
+    subjectClient = uniq.length === 1 ? uniq[0] : "Clientes Diversos";
+  }
+
+  const subject = `Aviso de Atraso - ${subjectClient}`;
+  const bodyHtml = `
+  <div style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#111">
+    <p>Prezada equipe ${subjectClient},</p>
+    <p>Gostaríamos de informar que identificamos atraso nas seguintes operações:</p>
+    ${rowsToEmailTable(delayed)}
+    <p>Estamos trabalhando para apurar a nova previsão de chegada. Você receberá um e-mail subsequente com a previsão atualizada assim que a informação for confirmada.</p>
+    <p>Atenciosamente,<br/>Mercosul Line</p>
+  </div>`.trim();
+
+  const headers = [
+    "From: Mercosul Line <no-reply@mercosulline.local>",
+    "To: destinatario@exemplo.com",
+    `Subject: ${subject}`,
+    `Date: ${new Date().toUTCString()}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/html; charset=UTF-8"
+  ].join("\r\n");
+
+  const eml = `${headers}\r\n\r\n${bodyHtml}`;
+  const slug = subjectClient.toLowerCase().replace(/[^\w]+/g, "-");
+  downloadBlob(`aviso_atraso_${slug}.eml`, new Blob([eml], { type: "message/rfc822" }));
+};
+
+/* ------------------------------------------------------------------ */
+/* DIÁRIO DE BORDO (substitui Exportar Excel)                          */
+/* ------------------------------------------------------------------ */
+const wireLogbookLink = () => {
+  const btn = document.getElementById("export-excel");
+  if (!btn) return;
+
+  // abrimos direto no link fixo do Diário de Bordo
+  const url = "https://diario-bordo.netlify.app/";
+
+  btn.textContent = "Abrir Diário de Bordo";
+  btn.addEventListener("click", () => {
+    window.open(url, "_blank");
+  });
+};
+
+/* ------------------------------------------------------------------ */
+/* INICIALIZAÇÃO                                                       */
+/* ------------------------------------------------------------------ */
+const initializeAdminPage = (auth, db, user) => {
+  getDoc(doc(db, "users", user.uid)).then((snap) => {
+    const d = snap.data();
+    if (d?.role === "admin") {
+      const sec = document.getElementById("user-management-section");
+      if (sec) sec.classList.remove("hidden");
     }
+  });
+
+  const logoutButton = document.getElementById("logout-button");
+  if (logoutButton) logoutButton.addEventListener("click", () => signOut(auth).then(() => (window.location.href = "index.html")));
+
+  const dataRef = doc(db, "tracking_data", "latest");
+
+  const uploadInput = document.getElementById("upload-file");
+  if (uploadInput) uploadInput.addEventListener("change", (e) => handleFileUpload(e, db, dataRef));
+
+  const clearDataBtn = document.getElementById("clear-data-btn");
+  if (clearDataBtn) clearDataBtn.addEventListener("click", () => handleClearData(db, dataRef));
+
+  document.getElementById("compose-email-btn")?.addEventListener("click", generateDelayedEmailEML);
+  document.getElementById("send-email-btn")?.addEventListener("click", generateDelayedEmailEML);
+
+  wireLogbookLink();
+
+  initializeUI(applyFiltersAndRender, (type) => {
+    if (type === "all") handleDashboardClick("all");
+    if (type === "onTime") handleDashboardClick("onTime");
+    if (type === "delayed") handleDashboardClick("delayed");
+  });
+
+  onSnapshot(dataRef, (snap) => {
+    const data = snap.exists() ? (snap.data().records || []) : [];
+    allData = Array.isArray(data) ? data : [];
+    populateClientFilter(allData);
+    applyFiltersAndRender();
+    displayPendingUsers(db);
+  });
 };
 
-document.addEventListener('DOMContentLoaded', checkAuth);
+const checkAuth = async () => {
+  try {
+    const config = JSON.parse(__firebase_config);
+    const app = initializeApp(config);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) initializeAdminPage(auth, db, user);
+      else window.location.href = "index.html";
+    });
+  } catch (err) {
+    console.error("Erro ao inicializar o Firebase:", err);
+  }
+};
+
+document.addEventListener("DOMContentLoaded", checkAuth);

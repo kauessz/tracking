@@ -1,110 +1,152 @@
 /**
- * Formata um objeto Date para a string "dd/mm/yyyy, hh:mm".
- * @param {Date} dateObject O objeto Date a ser formatado.
- * @returns {string|null} A string formatada ou null se a entrada for inválida.
+ * utils.js — parsing/format de datas + cálculo de atrasos
+ * Saída padronizada: "dd/mm/aaaa hh:mm" (hora LOCAL, sem aplicar fuso indevido)
  */
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+/* ---------------------- Helpers de data ---------------------- */
+
+/**
+ * Converte Excel Serial para Date **em horário local** (sem -3h).
+ * Excel conta dias a partir de 1899-12-30. Aqui quebramos em parte inteira (dia)
+ * e fração (horas/min/seg), e montamos Date local sem passar por UTC.
+ */
+const excelSerialToDate = (val) => {
+  const serial = Number(val);
+  if (!isFinite(serial)) return null;
+
+  const base = new Date(1899, 11, 30); // 1899-12-30 (LOCAL)
+  const wholeDays = Math.floor(serial);
+  const frac = serial - wholeDays;
+
+  // Avança dia local
+  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  d.setDate(d.getDate() + wholeDays);
+
+  // Converte fração do dia em h:m:s (arredondado a segundos)
+  const totalSecs = Math.round(frac * 86400);
+  const hh = Math.floor(totalSecs / 3600);
+  const mm = Math.floor((totalSecs % 3600) / 60);
+  const ss = totalSecs % 60;
+
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, ss, 0);
+};
+
+// dd/mm/aaaa [hh:mm]
+const parseBrazil = (txt) => {
+  const m = String(txt).trim().match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[,\s]+(\d{1,2}):(\d{2}))?$/
+  );
+  if (!m) return null;
+  let [, dd, mm, yyyy, hh, mi] = m;
+  dd = parseInt(dd, 10);
+  mm = parseInt(mm, 10) - 1;
+  yyyy = parseInt(yyyy, 10);
+  if (yyyy < 100) yyyy += 2000;
+  hh = hh ? parseInt(hh, 10) : 0;
+  mi = mi ? parseInt(mi, 10) : 0;
+  const d = new Date(yyyy, mm, dd, hh, mi);
+  return isNaN(d) ? null : d;
+};
+
+/* ---------------------- API Pública ---------------------- */
+
+/** Formata Date para "dd/mm/aaaa hh:mm" (LOCAL) */
 export const formatDate = (dateObject) => {
-    if (!(dateObject instanceof Date) || isNaN(dateObject)) {
-        return null;
-    }
-    const day = String(dateObject.getDate()).padStart(2, '0');
-    const month = String(dateObject.getMonth() + 1).padStart(2, '0');
-    const year = dateObject.getFullYear();
-    const hours = String(dateObject.getHours()).padStart(2, '0');
-    const minutes = String(dateObject.getMinutes()).padStart(2, '0');
-    return `${day}/${month}/${year}, ${hours}:${minutes}`;
+  if (!(dateObject instanceof Date) || isNaN(dateObject)) return null;
+  const dd = pad2(dateObject.getDate());
+  const mm = pad2(dateObject.getMonth() + 1);
+  const yyyy = dateObject.getFullYear();
+  const hh = pad2(dateObject.getHours());
+  const mi = pad2(dateObject.getMinutes());
+  return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
 };
 
 /**
- * Analisa uma string de data de vários formatos para um objeto Date válido.
- * Lida com "dd/mm/yyyy, hh:mm" (nosso formato padrão) e "m/d/yy hh:mm" (formato da planilha).
- * @param {string} dateString A data a ser analisada.
- * @returns {Date|null} Um objeto Date ou null se a análise falhar.
+ * Analisa vários formatos: Excel serial (number/string), "dd/mm/aaaa hh:mm",
+ * e fallback de Date (cautela). Tudo interpretado como **horário local**.
  */
-export const parseDate = (dateString) => {
-    if (!dateString || typeof dateString !== 'string') return null;
+export const parseDate = (value) => {
+  if (value === null || value === undefined || value === "") return null;
 
-    // Tenta corresponder ao nosso formato padrão: "dd/mm/yyyy, hh:mm"
-    let parts = dateString.match(/^(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})$/);
-    if (parts) {
-        const day = parseInt(parts[1], 10);
-        const month = parseInt(parts[2], 10) - 1; // Mês em JS é 0-11
-        const year = parseInt(parts[3], 10);
-        const hour = parseInt(parts[4], 10);
-        const minute = parseInt(parts[5], 10);
-        return new Date(year, month, day, hour, minute);
-    }
+  // número (Excel) ou string numérica (Excel)
+  if (typeof value === "number") return excelSerialToDate(value);
+  const trimmed = String(value).trim();
+  if (/^\d+(\.\d+)?$/.test(trimmed)) return excelSerialToDate(trimmed);
 
-    // Tenta corresponder ao formato da planilha (americano): "m/d/yy h:mm"
-    parts = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[,\s]+(\d{1,2}):(\d{2}))?/);
-    if (parts) {
-        let month = parseInt(parts[1], 10) - 1; // Mês
-        let day = parseInt(parts[2], 10);     // Dia
-        let year = parseInt(parts[3], 10);
-        const hour = parts[4] ? parseInt(parts[4], 10) : 0;
-        const minute = parts[5] ? parseInt(parts[5], 10) : 0;
+  // BR
+  const br = parseBrazil(trimmed);
+  if (br) return br;
 
-        if (year < 100) {
-            year += 2000; // Converte '25' para '2025'
-        }
-        
-        // Validação básica
-        if (month >= 0 && month < 12 && day > 0 && day <= 31) {
-             return new Date(year, month, day, hour, minute);
-        }
-    }
-
-    return null; // Retorna null se nenhum formato corresponder
+  // Fallback genérico
+  const d = new Date(trimmed);
+  return isNaN(d) ? null : d;
 };
 
-
 /**
- * Calcula o atraso em minutos, ajustando para o fuso horário de Manaus.
- * @param {object} operation O objeto da operação contendo as datas e a cidade.
- * @returns {number|null} O atraso em minutos ou null se as datas forem inválidas.
+ * Calcula o atraso em minutos, com ajuste -1h para Manaus:
+ * - COLETA + POL=Manaus, ou
+ * - ENTREGA + POD=Manaus
+ * Mantém fallback: se CidadeDescarga contiver "manaus", também aplica -1h.
  */
 export const calculateDelayInMinutes = (operation) => {
-    const previsaoDate = parseDate(operation.DataProgramada);
-    if (!previsaoDate) return null;
+  const previsaoDate = parseDate(operation?.DataProgramada);
+  if (!previsaoDate) return null;
 
-    let execucaoDate = parseDate(operation.DataChegada);
+  let execucaoDate = parseDate(operation?.DataChegada);
 
-    // Se a data de execução estiver em falta e a data prevista já passou, usa a hora atual.
-    if (!execucaoDate && previsaoDate < new Date()) {
-        execucaoDate = new Date();
-    }
-    
-    if (!execucaoDate) return null;
+  // Se falta execução e a previsão já passou, usa "agora"
+  if (!execucaoDate && previsaoDate < new Date()) execucaoDate = new Date();
+  if (!execucaoDate) return null;
 
-    let adjustedExecucaoDate = new Date(execucaoDate.getTime());
+  let adjusted = new Date(execucaoDate.getTime());
 
-    if (operation.CidadeDescarga && operation.CidadeDescarga.toLowerCase().includes('manaus')) {
-        adjustedExecucaoDate.setHours(adjustedExecucaoDate.getHours() - 1);
-    }
+  const tipo = (operation?.TipoProgramacao || "").toString().toLowerCase();
+  const pol  = (operation?.POL || "").toString().toLowerCase();
+  const pod  = (operation?.POD || "").toString().toLowerCase();
+  const isManaus = (s) => s.includes("manaus");
 
-    return (adjustedExecucaoDate.getTime() - previsaoDate.getTime()) / (1000 * 60);
+  if ((tipo.includes("coleta")  && isManaus(pol)) ||
+      (tipo.includes("entrega") && isManaus(pod)) ||
+      ((operation?.CidadeDescarga || "").toString().toLowerCase().includes("manaus"))) {
+    adjusted = new Date(adjusted.getTime() - 60 * 60 * 1000);
+  }
+
+  return Math.round((adjusted.getTime() - previsaoDate.getTime()) / 60000);
 };
 
-/**
- * Formata uma string de data para exibição.
- * @param {string} dateString A string de data a ser formatada.
- * @returns {string} A string de data formatada ou 'N/A' se a entrada for inválida.
- */
-export const formatDateForDisplay = (dateString) => {
-    if (!dateString) return 'N/A';
-    return dateString;
+/** Formata valor de data aceito por parseDate para exibição. */
+export const formatDateForDisplay = (value) => {
+  const d = parseDate(value);
+  if (!d) return "N/A";
+  return formatDate(d);
 };
 
-/**
- * Formata o total de minutos numa string HH:MM ou "ON TIME".
- * @param {number} totalMinutes O total de minutos a formatar.
- * @returns {string} A string formatada.
- */
+/** Converte minutos em "HH:MM" ou "ON TIME" (<=0). */
 export const formatMinutesToHHMM = (totalMinutes) => {
-    if (totalMinutes === null || isNaN(totalMinutes) || totalMinutes <= 0) {
-        return "ON TIME";
+  if (totalMinutes === null || isNaN(totalMinutes) || totalMinutes <= 0) {
+    return "ON TIME";
+  }
+  const h = Math.floor(totalMinutes / 60);
+  const m = Math.round(totalMinutes % 60);
+  return `${pad2(h)}:${pad2(m)}`;
+};
+
+/* ---------------------- PWA helper ---------------------- */
+export const registerPWA = () => {
+  try {
+    // injeta manifest se não estiver no HTML
+    if (!document.querySelector('link[rel="manifest"]')) {
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = '/manifest.webmanifest';
+      document.head.appendChild(link);
     }
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = Math.round(totalMinutes % 60);
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((e)=>console.warn('SW fail:', e));
+    }
+  } catch (e) {
+    console.warn('PWA register skipped:', e);
+  }
 };

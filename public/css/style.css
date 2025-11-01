@@ -1,73 +1,83 @@
-/* General body styling */
+/* Base branca + detalhes azuis; container amplo e tabelas responsivas */
+
+:root {
+  /* largura útil maior (desktop) */
+  --page-max: 1360px;
+}
+@media (min-width: 1536px){
+  :root { --page-max: 1480px; }
+}
+
+/* --------- Layout geral --------- */
 body {
-  font-family: 'Inter', sans-serif;
-  transition: background-color 0.3s, color 0.3s;
+  background:#f6f7fb;
+  color:#111827;
+  -webkit-font-smoothing:antialiased;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+.page-wrap {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 20px;
 }
 
-/* Custom styling for the file input button */
-input[type="file"]::file-selector-button {
-  background-color: #1e3a8a; /* dark blue */
-  color: white;
-  border: none;
-  padding: 0.75rem 1rem;
-  border-radius: 0.375rem; /* rounded-md */
-  cursor: pointer;
-  transition: background-color 0.2s;
+/* Topbar unificada */
+.topbar {
+  background:#0b2263;
+  color:#fff;
 }
+.topbar .page-wrap {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.topbar a { color:#e5e7eb; text-decoration:none; }
 
-input[type="file"]::file-selector-button:hover {
-    background-color: #1c3172; /* slightly darker blue */
+/* --------- Cards --------- */
+.card {
+  background:#fff;
+  border-radius:14px;
+  box-shadow:0 6px 18px rgba(23,26,31,.06);
+  border:1px solid #e9ecf2;
 }
+.card-header { font-weight:600; padding:16px 20px; border-bottom:1px solid #eef0f3; }
+.card-body   { padding:16px 20px; }
 
-/* --- Dark Mode Theme --- */
+/* --------- Inputs --------- */
+input[type="text"], input[type="date"], input[type="email"], input[type="password"],
+select, .choices__inner {
+  border:1px solid #d9d9e3;
+  border-radius:8px;
+  height:40px;
+}
+button { border-radius:8px; }
 
-/* Base dark mode styles */
-.dark-mode {
-  background-color: #1a202c; /* gray-900 */
-  color: #e2e8f0; /* gray-300 */
-}
+/* --------- Tabelas --------- */
+.table-wrap { overflow-x: auto; }
+.table-wrap table { min-width:1100px; border-collapse: collapse; width:100%; background:#fff; }
+.table-wrap th, .table-wrap td { white-space: nowrap; padding:12px 16px; border-bottom:1px solid #eef0f3; }
+.table-wrap th { font-weight:600; background:#fafafa; color:#6b7280; text-transform:uppercase; font-size:.72rem; letter-spacing:.04em; }
 
-/* Sections and cards in dark mode */
-.dark-mode section {
-    background-color: #2d3748; /* gray-800 */
-    border-color: #4a5568; /* gray-700 */
-}
+/* Linhas atrasadas (vermelho claro) */
+tr.bg-red-50 { background-color:#fdecec !important; }
 
-/* Header and Footer in dark mode */
-.dark-mode header {
-    background-color: #111827; /* gray-900, slightly different from body */
-}
-.dark-mode footer {
-    background-color: #111827; /* gray-900 */
-}
+/* “ON TIME” verde forte */
+.on-time-pill { color:#0f5132; font-weight:700; }
 
-/* Text colors in dark mode */
-.dark-mode h2, .dark-mode label {
-    color: #f7fafc; /* gray-50 */
+/* --------- KPIs --------- */
+.kpi-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; }
+@media (max-width: 1024px){ .kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 640px){  .kpi-grid { grid-template-columns: 1fr; } }
+.kpi {
+  border-radius:12px; padding:16px; color:#fff; display:flex; flex-direction:column; gap:.25rem;
+  box-shadow:0 6px 18px rgba(17,24,39,.10)
 }
+.kpi h3{font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;opacity:.9}
+.kpi p{font-size:2rem;font-weight:800;line-height:1}
+.kpi-blue{background:#1e3a8a}
+.kpi-green{background:#166534}
+.kpi-red{background:#7f1d1d}
+.kpi-orange{background:#92400e}
 
-.dark-mode p, .dark-mode div, .dark-mode strong {
-    color: #cbd5e0; /* gray-400 */
-}
-
-.dark-mode strong {
-    color: #e2e8f0; /* gray-300 */
-}
-
-/* Inputs and Textareas in dark mode */
-.dark-mode input,
-.dark-mode select,
-.dark-mode textarea {
-  background-color: #4a5568; /* gray-700 */
-  color: white;
-  border-color: #718096; /* gray-600 */
-}
-
-.dark-mode input::placeholder {
-    color: #a0aec0; /* gray-500 */
-}
-
-/* Progress bar in dark mode */
-.dark-mode #upload-progress {
-    background-color: #4a5568; /* gray-700 */
-}
+/* Utilidades */
+.truncate-cell { display:inline-block; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hidden { display:none; }
