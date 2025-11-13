@@ -3,57 +3,287 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Registo de Utilizador</title>
+  <title>Solicitar Acesso | Rastreamento Mercosul Line</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .card-glass {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    
+    .input-modern {
+      transition: all 0.3s ease;
+    }
+    
+    .input-modern:focus {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.4);
+    }
+    
+    .radio-card {
+      transition: all 0.3s ease;
+    }
+    
+    .radio-card:hover {
+      transform: translateY(-2px);
+    }
+    
+    .radio-card input:checked + .radio-content {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .logo {
+      font-size: 2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
-  <header class="topbar">
-    <div class="page-wrap font-bold text-xl">Solicitação de Acesso</div>
-  </header>
 
-  <main class="page-wrap flex-grow w-full max-w-2xl">
-    <section class="card">
-      <div class="card-body">
-        <h2 class="text-2xl font-bold mb-6 text-center">Criar Nova Conta</h2>
-
-        <label for="register-email" class="block text-sm font-medium text-gray-700">Email</label>
-        <input type="email" id="register-email" placeholder="seu-email@exemplo.com" class="w-full px-4 py-2 border rounded mt-1 mb-4">
-
-        <label for="register-password" class="block text-sm font-medium text-gray-700">Senha</label>
-        <input type="password" id="register-password" placeholder="Mínimo de 6 caracteres" class="w-full px-4 py-2 border rounded mt-1 mb-4">
-
-        <label class="block text-sm font-medium text-gray-700">Tipo de Conta</label>
-        <div class="mt-2 grid grid-cols-2 gap-2">
-          <label class="border rounded p-2 cursor-pointer text-center">
-            <input type="radio" name="account_type" id="type_internal" value="internal" class="mr-2" checked>
-            Funcionário Interno
-          </label>
-          <label class="border rounded p-2 cursor-pointer text-center">
-            <input type="radio" name="account_type" id="type_shipper" value="shipper" class="mr-2">
-            Cliente / Embarcador
-          </label>
-        </div>
-
-        <p id="register-error" class="text-red-500 text-sm hidden mt-4"></p>
-        <p id="register-success" class="text-green-600 text-sm hidden mt-4"></p>
-
-        <button id="register-button" class="bg-blue-800 hover:bg-blue-900 text-white px-4 py-2 rounded w-full mt-6">Solicitar Acesso</button>
-
-        <div class="text-center mt-6">
-          <a href="index.html" class="text-sm text-blue-600 hover:underline">&larr; Voltar para o Login</a>
-        </div>
+<body class="min-h-screen flex items-center justify-center p-4">
+  
+  <div class="w-full max-w-md animate-fade-in">
+    
+    <!-- Logo/Header -->
+    <div class="text-center mb-8">
+      <h1 class="logo mb-2">Mercosul Line</h1>
+      <p class="text-white text-sm font-medium">Sistema de Rastreamento</p>
+    </div>
+    
+    <!-- Card de Registro -->
+    <div class="card-glass rounded-2xl shadow-2xl p-8">
+      
+      <!-- Título -->
+      <div class="text-center mb-8">
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">
+          Solicitar Acesso
+        </h2>
+        <p class="text-gray-600 text-sm">
+          Preencha os dados abaixo para criar sua conta
+        </p>
       </div>
-    </section>
-  </main>
+      
+      <!-- Formulário -->
+      <form id="register-form" class="space-y-6">
+        
+        <!-- Nome Completo -->
+        <div>
+          <label for="register-nome" class="block text-sm font-semibold text-gray-700 mb-2">
+            Nome Completo <span class="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            id="register-nome"
+            placeholder="João da Silva"
+            class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+            required
+          >
+        </div>
+        
+        <!-- Email -->
+        <div>
+          <label for="register-email" class="block text-sm font-semibold text-gray-700 mb-2">
+            Email <span class="text-red-500">*</span>
+          </label>
+          <input
+            type="email"
+            id="register-email"
+            placeholder="seu-email@exemplo.com"
+            class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+            required
+          >
+        </div>
 
-  <footer class="bg-gray-800 text-white text-center p-4 text-sm">
-    &copy; 2025 Rastreamento
-  </footer>
+        <!-- Telefone -->
+        <div>
+          <label for="register-telefone" class="block text-sm font-semibold text-gray-700 mb-2">
+            Telefone <span class="text-red-500">*</span>
+          </label>
+          <input
+            type="tel"
+            id="register-telefone"
+            placeholder="(11) 98765-4321"
+            maxlength="15"
+            class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+            required
+          >
+          <p class="text-xs text-gray-500 mt-1">
+            Formato: (XX) XXXXX-XXXX
+          </p>
+        </div>
 
+        <!-- CPF -->
+        <div>
+          <label for="register-cpf" class="block text-sm font-semibold text-gray-700 mb-2">
+            CPF <span class="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            id="register-cpf"
+            placeholder="000.000.000-00"
+            maxlength="14"
+            class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+            required
+          >
+          <p class="text-xs text-gray-500 mt-1">
+            Formato: XXX.XXX.XXX-XX
+          </p>
+        </div>
+        
+        <!-- Senha -->
+        <div>
+          <label for="register-password" class="block text-sm font-semibold text-gray-700 mb-2">
+            Senha <span class="text-red-500">*</span>
+          </label>
+          <div class="relative">
+            <input
+              type="password"
+              id="register-password"
+              placeholder="Mínimo de 6 caracteres"
+              class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+              required
+            >
+            <button
+              type="button"
+              id="toggle-password"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">
+            Use uma senha forte com no mínimo 6 caracteres
+          </p>
+        </div>
+        
+        <!-- Tipo de Conta -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-3">
+            Tipo de Conta <span class="text-red-500">*</span>
+          </label>
+          
+          <div class="grid grid-cols-2 gap-3">
+            <!-- Funcionário Interno -->
+            <label class="radio-card cursor-pointer">
+              <input
+                type="radio"
+                name="account_type"
+                id="type_internal"
+                value="internal"
+                class="sr-only"
+                checked
+              >
+              <div class="radio-content border-2 border-gray-300 rounded-xl p-4 text-center transition-all">
+                <svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <span class="text-sm font-semibold">
+                  Funcionário<br>Mercosul
+                </span>
+              </div>
+            </label>
+            
+            <!-- Cliente/Embarcador -->
+            <label class="radio-card cursor-pointer">
+              <input
+                type="radio"
+                name="account_type"
+                id="type_shipper"
+                value="shipper"
+                class="sr-only"
+              >
+              <div class="radio-content border-2 border-gray-300 rounded-xl p-4 text-center transition-all">
+                <svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
+                </svg>
+                <span class="text-sm font-semibold">
+                  Cliente /<br>Embarcador
+                </span>
+              </div>
+            </label>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">
+            ℹ️ A vinculação com a empresa será feita pelo administrador após aprovação
+          </p>
+        </div>
+        
+        <!-- Mensagens de Erro/Sucesso -->
+        <div id="register-error" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm"></div>
+        <div id="register-success" class="hidden bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm"></div>
+        
+        <!-- Botão Submit -->
+        <button
+          type="submit"
+          id="register-button"
+          class="btn-primary w-full text-white font-semibold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all"
+        >
+          Solicitar Acesso
+        </button>
+        
+        <!-- Link para Login -->
+        <div class="text-center pt-4">
+          <p class="text-gray-600 text-sm">
+            Já possui uma conta?
+            <a href="index.html" class="text-purple-600 hover:text-purple-700 font-semibold transition-colors">
+              Fazer Login
+            </a>
+          </p>
+        </div>
+        
+      </form>
+      
+    </div>
+    
+    <!-- Footer -->
+    <div class="text-center mt-6">
+      <p class="text-white text-xs opacity-75">
+        © 2025 Mercosul Line. Todos os direitos reservados.
+      </p>
+    </div>
+    
+  </div>
+  
+  <!-- Scripts -->
   <script>
-    const __firebase_config = JSON.stringify({
+    window.__firebase_config = {
       apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
       authDomain: "mercosul-teste.firebaseapp.com",
       projectId: "mercosul-teste",
@@ -61,8 +291,12 @@
       messagingSenderId: "650943607449",
       appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
       measurementId: "G-KJHFXFLJ6K"
-    });
+    };
   </script>
+  
+  <script type="module" src="./js/config.js"></script>
+  <script type="module" src="./js/utilities.js"></script>
   <script type="module" src="./js/register.js"></script>
+  
 </body>
 </html>

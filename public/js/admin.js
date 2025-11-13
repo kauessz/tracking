@@ -1,596 +1,1725 @@
-// --- Módulos Firebase ---
+// admin.js - VERSÃO CORRIGIDA + OCORRÊNCIAS
+//
+// Correções aplicadas:
+// 1. KPI cards com IDs corretos para cliques funcionarem
+// 2. Upload XLSX funcionando com fallback ESM
+// 3. Gráfico de motivos com "sem justificativa" ao invés de "-"
+// 4. Uso de APP_CONFIG.API_BASE (com fallback) e vários guards de DOM
+// 5. Aba de Ocorrências integrada ao backend
+// 6. Fluxo de aprovação de usuários com tipo de conta e embarcador
+//
+// ------------------------------------------------------
+// IMPORTS FIREBASE (CDN modular)
+// ------------------------------------------------------
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import {
-  getFirestore, doc, setDoc, onSnapshot, collection, query, where,
-  getDocs, getDoc, updateDoc
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+  getAuth,
+  onAuthStateChanged,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-// --- UI/Utils ---
-import {
-  initializeUI, renderData, populateClientFilter, getFilters,
-  clearFilters, showDetailsScreen
-} from "./ui.js";
-import {
-  formatDateForDisplay,
-  parseDate,
-  calculateDelayInMinutes,
-  formatMinutesToHHMM
-} from "./utils.js";
+// ------------------------------------------------------
+// IMPORTS ADICIONAIS
+// ------------------------------------------------------
+import { Toast, Loading, Parse, Format } from "./utilities.js";
+import { APP_CONFIG } from "./config.js";
 
-/* ------------------------------------------------------------------ */
-/* ESTADO GLOBAL                                                       */
-/* ------------------------------------------------------------------ */
-let allData = [];
-let currentlyDisplayedData = [];
+// ------------------------------------------------------
+// CONFIG
+// ------------------------------------------------------
+const API_BASE = APP_CONFIG?.API_BASE ?? "http://localhost:8080"; // usa config.js com fallback
+const firebaseConfig = JSON.parse(__firebase_config);
 
-/* ------------------------------------------------------------------ */
-/* NORMALIZAÇÃO                                                        */
-/* ------------------------------------------------------------------ */
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 
-// pega primeiro valor existente dentro de uma lista de chaves
-const by = (row, keys) => {
-  for (const k of keys) {
-    if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k];
-  }
-  return undefined;
+// Token JWT Firebase que vamos mandar nas rotas protegidas
+let authToken = null;
+
+// ------------------------------------------------------
+// ESTADO GLOBAL
+// ------------------------------------------------------
+const state = {
+  allOps: [], // TODAS operações normalizadas
+  viewOps: [], // operações filtradas/sort
+  filters: {
+    embarcadores: [], // lista (strings) selecionados
+    status: "all", // all | ontime | late | canceled
+    range: "all", // all | 7d | 30d
+    search: "", // busca texto livre
+    date: "", // yyyy-mm-dd
+  },
+  sort: {
+    field: null,
+    asc: true,
+  },
+  expandedBooking: null, // linha expandida
+  pagination: {
+    currentPage: 1,
+    itemsPerPage: 25, // pode ser número ou string 'all'
+    totalItems: 0,
+    totalPages: 0,
+  },
+  charts: {
+    delayChart: null,
+    reasonsChart: null,
+  },
+  pendingUsers: [],
+  // ✅ Ocorrências
+  ocorrencias: [],
+  ocorrenciasFilter: {
+    booking: "",
+    tipo: "",
+  },
 };
 
-const pickCPFfromRow = (row) =>
-  row?.["CPF motorista programado"] ??
-  row?.["CPF Motorista Programado"] ??
-  row?.["CPF_Motorista_Programado"] ??
-  row?.["CPF Motorista"] ??
-  row?.CPFMotorista ??
-  row?.CpfMotorista ??
-  row?.CPF ??
-  row?.Cpf ??
-  null;
+// ------------------------------------------------------
+// DOM REFS
+// ------------------------------------------------------
 
-/** Normaliza uma linha vinda da planilha para o nosso schema */
-const normalizeRowKeys = (r) => {
-  const clean = (v) => (v ?? "").toString().trim();
+// abas
+const tabsBtns = document.querySelectorAll(".tab-btn");
+function activateTab(tabId) {
+  tabsBtns.forEach((b) => b.classList.remove("active"));
+  const btn = Array.from(tabsBtns).find((b) => b.getAttribute("data-tab") === tabId);
+  if (btn) btn.classList.add("active");
 
-  const out = { ...r };
+  document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+  const el = document.getElementById(tabId);
+  if (el) el.classList.add("active");
+}
 
-  // ---------- Chaves principais ----------
-  out.NumeroProgramacao =
-    out.NumeroProgramacao ??
-    clean(by(r, ["Número da programação", "Numero da Programacao", "Nº Programação", "Nº Prog."]));
+tabsBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const tabId = btn.getAttribute("data-tab");
+    activateTab(tabId);
+  });
+});
 
-  out.Booking = out.Booking ?? clean(by(r, ["Booking", "Booking "]));
-  out.Container = out.Container ?? clean(by(r, ["Containers", "Container"]));
+// filtros/ações Operações
+const embarcadorSelectEl = document.getElementById("filter-embarcador");
+const statusEl = document.getElementById("filter-status");
+const rangeEl = document.getElementById("filter-range");
+const bookingEl = document.getElementById("filter-booking");
+const dateEl = document.getElementById("filter-date");
+const clearFiltersBtn = document.getElementById("clear-filters");
 
-  // Embarcador (vira Cliente no app)
-  out.Cliente = out.Cliente ?? clean(by(r, ["Embarcador", "Cliente"]));
-  out.NumeroCliente = out.NumeroCliente ?? clean(by(r, ["Número cliente", "Numero cliente", "Nº Cliente"]));
+const sendEmailBtn = document.getElementById("send-email-btn");
+const copyEmailBtn = document.getElementById("copy-email-btn");
+const openDiaryBtn = document.getElementById("open-diary-btn");
 
-  // Datas (mantemos como string/número; utils.parseDate trata os casos)
-  out.DataProgramada =
-    out.DataProgramada ??
-    by(r, ["Previsão início atendimento (BRA)", "Previsao inicio atendimento (BRA)", "Previsão Início", "Previsao Inicio"]);
+// tabela / alerta
+const tableBodyEl = document.getElementById("results-table-body");
+const tableHeadEl = document.getElementById("results-table-head");
 
-  out.DataChegada =
-    out.DataChegada ??
-    by(r, ["Dt Início da Execução (BRA)", "Dt Inicio da Execucao (BRA)", "Início Execução", "Inicio Execucao"]);
+const lateAlertBoxEl = document.getElementById("late-alert-box");
+const lateAlertMsgEl = document.getElementById("late-alert-msg");
 
-  out.DataSaida =
-    out.DataSaida ??
-    by(r, ["Dt FIM da Execução (BRA)", "Dt Fim da Execucao (BRA)", "Fim Execução", "Fim Execucao"]);
+// preview de e-mail
+const emailPreviewEl = document.getElementById("email-preview");
+const emailDraftEl = document.getElementById("email-draft");
+const closeEmailBtn = document.getElementById("close-email-preview");
 
-  out.DataPrevisaoEntregaRecalculada =
-    out.DataPrevisaoEntregaRecalculada ??
-    by(r, ["Data de previsão de entrega recalculada (BRA)", "Data de previsao de entrega recalculada (BRA)"]);
+// dashboard KPIs
+const totalOpsEl = document.getElementById("kpi-total-value");
+const onTimeOpsEl = document.getElementById("kpi-ontime-value");
+const delayedOpsEl = document.getElementById("kpi-late-value");
+const delayedOpsPctEl = document.getElementById("kpi-pct-value");
 
-  // Diversos
-  out.TipoProgramacao =
-    out.TipoProgramacao ??
-    clean(by(r, ["Tipo de programação", "Tipo Programação", "Tipo"]));
+// ✅ CORREÇÃO 1: IDs corretos dos cards
+const totalOpsCard = document.getElementById("kpi-total-ops");
+const onTimeOpsCard = document.getElementById("kpi-ontime-ops"); // CORRIGIDO
+const delayedOpsCard = document.getElementById("kpi-late-ops"); // CORRIGIDO
 
-  out.SituacaoProgramacao =
-    out.SituacaoProgramacao ??
-    clean(by(r, ["Situação programação", "Situacao programacao", "Situação", "Situacao"]));
+// charts
+const delayChartCanvas = document.getElementById("delay-chart");
+const reasonsChartCanvas = document.getElementById("reasons-chart");
+const reasonsBarsEl = document.getElementById("reasons-bars");
 
-  out.SituacaoPrazoProgramacao =
-    out.SituacaoPrazoProgramacao ??
-    clean(by(r, ["Situação prazo programação", "Situacao prazo programacao"]));
+// upload
+const uploadFileEl = document.getElementById("upload-file");
+const uploadStatusEl = document.getElementById("upload-status");
+const clearDataBtn = document.getElementById("clear-data-btn");
 
-  out.Transportadora = out.Transportadora ?? clean(by(r, ["Transportadora"]));
-  out.JustificativaAtraso = out.JustificativaAtraso ?? clean(by(r, ["Justificativa de atraso de programação", "Justificativa de atraso"]));
+// aprovações
+const pendingUsersTbody = document.getElementById("pending-users-table-body");
 
-  out.CidadeDescarga =
-    out.CidadeDescarga ??
-    clean(by(r, ["Cidade local de atendimento", "Cidade", "Cidade Descarga"]));
+// ✅ Refs da aba de ocorrências
+const ocorrenciasSearchBtn = document.getElementById("ocorrencias-search-btn");
+const ocorrenciasFilterBooking = document.getElementById("ocorrencias-filter-booking");
+const ocorrenciasFilterTipo = document.getElementById("ocorrencias-filter-tipo");
+const ocorrenciasList = document.getElementById("ocorrencias-list");
 
-  out.NomeLocalAtendimento = out.NomeLocalAtendimento ?? clean(by(r, ["Nome local de atendimento"]));
+// logout
+const logoutBtn = document.getElementById("logout-btn");
 
-  // Motorista / veículos
-  out.NomeMotoristaProgramado =
-    out.NomeMotoristaProgramado ??
-    clean(by(r, ["Nome do motorista programado", "Nome Motorista Programado", "Nome Motorista", "Motorista"]));
+// DOM da paginação
+const itemsPerPageSelect = document.getElementById("items-per-page");
+const prevPageBtn = document.getElementById("prev-page");
+const nextPageBtn = document.getElementById("next-page");
+const currentPageDisplay = document.getElementById("current-page-display");
+const showingInfoTop = document.getElementById("showing-info");
+const showingInfoBottom = document.getElementById("showing-info-bottom");
 
-  const cpf = pickCPFfromRow(r);
-  if (cpf) out.CpfMotorista = String(cpf).replace(/[^\d]/g, "");
+// multiselect Choices.js
+let embarcadorChoices = null;
 
-  out.PlacaVeiculo = out.PlacaVeiculo ?? clean(by(r, ["Placa do veículo", "Placa do veiculo"]));
-  out.PlacaCarreta1 = out.PlacaCarreta1 ?? clean(by(r, ["Placa da carreta 1"]));
-  out.PlacaCarreta2 = out.PlacaCarreta2 ?? clean(by(r, ["Placa da carreta 2"]));
+// ✅ CORREÇÃO 2: Garantir carregamento de XLSX/Papa mesmo em ES modules
+async function ensureLibs() {
+  let XLSX = globalThis.XLSX || (typeof window !== "undefined" && window.XLSX);
+  let Papa = globalThis.Papa || (typeof window !== "undefined" && window.Papa);
 
-  // POL / POD
-  out.POL = out.POL ?? clean(by(r, ["POL", "Pol", "Porto Origem"]));
-  out.POD = out.POD ?? clean(by(r, ["POD", "Pod", "Porto Destino"]));
+  // Fallback: carrega via ESM se não veio como global
+  if (!XLSX) {
+    try {
+      const mod = await import("https://cdn.jsdelivr.net/npm/xlsx@0.19.3/+esm");
+      XLSX = mod.default ?? mod;
+      console.log("✅ XLSX carregado via ESM");
+    } catch (e) {
+      console.error("❌ Falha ao carregar XLSX via ESM:", e);
+      throw new Error("XLSX não está carregado. Inclua no HTML.");
+    }
+  }
+  if (!Papa) {
+    try {
+      const mod = await import("https://cdn.jsdelivr.net/npm/papaparse@5.4.1/+esm");
+      Papa = mod.default ?? mod;
+      console.log("✅ PapaParse carregado via ESM");
+    } catch (e) {
+      console.error("❌ Falha ao carregar PapaParse via ESM:", e);
+    }
+  }
+  return { XLSX, Papa };
+}
 
-  // Porto da Operação (coleta => POL, entrega => POD, senão primeiro disponível)
-  if (!out.PortoOperacao) {
-    const tipo = clean(out.TipoProgramacao).toLowerCase();
-    const pol = clean(out.POL);
-    const pod = clean(out.POD);
-    if (tipo.includes("coleta")) out.PortoOperacao = pol || pod || "";
-    else if (tipo.includes("entrega")) out.PortoOperacao = pod || pol || "";
-    else out.PortoOperacao = pol || pod || "";
+// ------------------------------------------------------
+// HELPERS DE DATA / ATRASO
+// ------------------------------------------------------
+
+// parse "dd/mm/aaaa hh:mm" -> Date local
+function parseDateBR(str) {
+  if (!str || typeof str !== "string") return null;
+  const parts = str.trim().split(" ");
+  if (parts.length < 2) return null;
+
+  const [dmy, hm] = parts;
+  const [dd, mm, yyyy] = dmy.split("/");
+  const [HH, MM] = hm.split(":");
+
+  if (!dd || !mm || !yyyy || !HH || !MM) return null;
+
+  const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(HH), Number(MM), 0, 0);
+  if (isNaN(d.getTime())) return null;
+  return d;
+}
+
+// ISO -> "dd/mm/aaaa hh:mm"
+function isoToBR(isoVal) {
+  if (!isoVal) return "";
+  const d = new Date(isoVal);
+  if (isNaN(d.getTime())) return isoVal;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const HH = String(d.getHours()).padStart(2, "0");
+  const MM = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy} ${HH}:${MM}`;
+}
+
+function formatDateForDisplay(val) {
+  if (!val) return "—";
+  return val;
+}
+
+// atraso em minutos = Execução (ou agora) - Programado
+// <=0 => on time ; >0 => atraso
+function calculateDelayInMinutes(op) {
+  const prog = parseDateBR(op.DataProgramada);
+  if (!prog) return 0;
+
+  const execStart = parseDateBR(op.DataChegada) || null;
+  const ref = execStart || new Date();
+
+  const diffMs = ref.getTime() - prog.getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  return diffMin;
+}
+
+function formatMinutesToHHMM(mins) {
+  const positive = mins < 0 ? 0 : mins;
+  const h = Math.floor(positive / 60);
+  const m = positive % 60;
+  const hh = String(h).padStart(2, "0");
+  const mm = String(m).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+// ------------------------------------------------------
+// FUNÇÕES DE PAGINAÇÃO
+// ------------------------------------------------------
+function updatePagination() {
+  const totalItems = state.viewOps.length;
+  const itemsPerPage =
+    state.pagination.itemsPerPage === "all" ? totalItems : parseInt(state.pagination.itemsPerPage);
+
+  state.pagination.totalItems = totalItems;
+  state.pagination.totalPages =
+    itemsPerPage === totalItems ? 1 : Math.ceil(totalItems / Math.max(itemsPerPage, 1));
+
+  if (state.pagination.currentPage > state.pagination.totalPages) {
+    state.pagination.currentPage = Math.max(1, state.pagination.totalPages);
+  }
+}
+
+function getPaginatedOps() {
+  if (state.pagination.itemsPerPage === "all") {
+    return state.viewOps;
+  }
+  const itemsPerPage = parseInt(state.pagination.itemsPerPage);
+  const start = (state.pagination.currentPage - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return state.viewOps.slice(start, end);
+}
+
+function updatePaginationUI() {
+  const { currentPage, totalPages, totalItems, itemsPerPage } = state.pagination;
+
+  const perPage = itemsPerPage === "all" ? totalItems : parseInt(itemsPerPage);
+  const start = totalItems === 0 ? 0 : (currentPage - 1) * perPage + 1;
+  const end = Math.min(currentPage * perPage, totalItems);
+
+  const infoText = totalItems === 0 ? "Mostrando 0 de 0" : `Mostrando ${start}-${end} de ${totalItems}`;
+
+  if (showingInfoTop) showingInfoTop.textContent = infoText;
+  if (showingInfoBottom) showingInfoBottom.textContent = infoText;
+
+  if (currentPageDisplay) {
+    currentPageDisplay.textContent = `Página ${currentPage} de ${totalPages}`;
   }
 
-  for (const k of Object.keys(out)) {
-    if (out[k] === undefined) out[k] = null;
+  if (prevPageBtn) prevPageBtn.disabled = currentPage <= 1;
+  if (nextPageBtn) nextPageBtn.disabled = currentPage >= totalPages;
+}
+
+function goToPage(page) {
+  const { totalPages } = state.pagination;
+  if (page < 1) page = 1;
+  if (page > totalPages) page = totalPages;
+  state.pagination.currentPage = page;
+  renderOpsTable();
+  updatePaginationUI();
+}
+
+function changeItemsPerPage(value) {
+  state.pagination.itemsPerPage = value;
+  state.pagination.currentPage = 1;
+  updatePagination();
+  renderOpsTable();
+  updatePaginationUI();
+}
+
+// ------------------------------------------------------
+// NORMALIZAÇÃO DAS OPERAÇÕES (server -> front)
+// ------------------------------------------------------
+function normalizeOp(raw) {
+  const booking = raw.booking || raw.Booking || "";
+  const embarcador = raw.embarcador_nome || raw.Cliente || "";
+  const porto = raw.porto_operacao || raw.PortoOperacao || "";
+  const container = raw.container || raw.Container || raw.containers || "";
+
+  const progIso =
+    raw.previsao_inicio_atendimento || raw.previsao_inicio || raw.DataProgramada || "";
+  const execIso = raw.dt_inicio_execucao || raw.DataChegada || "";
+
+  const progFmt =
+    progIso && typeof progIso === "string" && progIso.includes("T") ? isoToBR(progIso) : progIso;
+  const execFmt =
+    execIso && typeof execIso === "string" && execIso.includes("T") ? isoToBR(execIso) : execIso;
+
+  // ✅ CORREÇÃO 3: Trata motivo vazio/nulo como "sem justificativa" (lowercase unificado)
+  let atrasoMotivo = raw.motivo_atraso || raw.justificativa_atraso || raw.JustificativaAtraso || "";
+  atrasoMotivo = (atrasoMotivo || "").trim().toLowerCase();
+  if (!atrasoMotivo || atrasoMotivo === "-") {
+    atrasoMotivo = "sem justificativa";
   }
-  return out;
-};
 
-/* ------------------------------------------------------------------ */
-/* APROVAÇÃO DE USUÁRIOS (igual ao anterior)                          */
-/* ------------------------------------------------------------------ */
-const updateUserStatus = async (db, uid, newStatus, details = {}) => {
-  try {
-    const userDocRef = doc(db, "users", uid);
-    const updateData = { status: newStatus, ...details };
-    await updateDoc(userDocRef, updateData);
-    displayPendingUsers(db);
-  } catch (error) {
-    console.error("Erro ao atualizar o estado do utilizador:", error);
+  const tipoProgRaw = raw.tipo_programacao || raw.TipoOperacao || raw.status_operacao || "";
+
+  return {
+    Booking: booking,
+    Container: container,
+    Cliente: embarcador,
+    PortoOperacao: porto,
+    DataProgramada: progFmt,
+    DataChegada: execFmt,
+    JustificativaAtraso: atrasoMotivo,
+    TipoOperacao: tipoProgRaw,
+  };
+}
+
+function normalizeOpsArray(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(normalizeOp);
+}
+
+// ------------------------------------------------------
+// AGRUPAMENTOS / KPIs / GRÁFICOS
+// ------------------------------------------------------
+function opMatchesFilters(op) {
+  if (state.filters.embarcadores.length > 0) {
+    if (!state.filters.embarcadores.includes(op.Cliente)) return false;
   }
-};
 
-const displayPendingUsers = async (db) => {
-  const tableBody = document.getElementById("pending-users-table-body");
-  if (!tableBody) return;
+  const delayMin = calculateDelayInMinutes(op);
+  const isLate = delayMin > 0;
+  const isOnTime = delayMin <= 0;
+  const isCanceled = /cancel/i.test(op.TipoOperacao || "");
 
-  const q = query(collection(db, "users"), where("status", "==", "pending"));
-  const querySnapshot = await getDocs(q);
+  if (state.filters.status === "ontime" && !isOnTime) return false;
+  if (state.filters.status === "late" && !isLate) return false;
+  if (state.filters.status === "canceled" && !isCanceled) return false;
 
-  const uniqueShippers = [...new Set(allData.map(i => i.Cliente).filter(Boolean))].sort();
+  if (state.filters.range !== "all") {
+    const progDt = parseDateBR(op.DataProgramada);
+    if (progDt) {
+      const now = new Date();
+      const diffDays = (now.getTime() - progDt.getTime()) / (1000 * 60 * 60 * 24);
+      if (state.filters.range === "7d" && diffDays > 7) return false;
+      if (state.filters.range === "30d" && diffDays > 30) return false;
+    }
+  }
 
-  tableBody.innerHTML = "";
-  if (querySnapshot.empty) {
-    tableBody.innerHTML =
-      '<tr><td colspan="3" class="px-6 py-4 text-center text-gray-500">Nenhum pedido de registo pendente.</td></tr>';
+  if (state.filters.search) {
+    const txt = state.filters.search.toLowerCase();
+    const hay = [op.Booking, op.Container, op.PortoOperacao, op.Cliente, op.TipoOperacao]
+      .join(" ")
+      .toLowerCase();
+    if (!hay.includes(txt)) return false;
+  }
+
+  if (state.filters.date) {
+    const progDtStr = op.DataProgramada || "";
+    const [dmy] = progDtStr.split(" ");
+    if (dmy) {
+      const [dd, mm, yyyy] = dmy.split("/");
+      const isoLike = `${yyyy}-${mm}-${dd}`;
+      if (isoLike !== state.filters.date) return false;
+    }
+  }
+  return true;
+}
+
+function applyFiltersAndSort() {
+  let arr = state.allOps.filter(opMatchesFilters);
+
+  if (state.sort.field) {
+    const f = state.sort.field;
+    const asc = state.sort.asc;
+    arr.sort((a, b) => {
+      const av = (a[f] ?? "").toString().toLowerCase();
+      const bv = (b[f] ?? "").toString().toLowerCase();
+      if (av < bv) return asc ? -1 : 1;
+      if (av > bv) return asc ? 1 : -1;
+      return 0;
+    });
+  }
+
+  state.viewOps = arr;
+}
+
+function buildKPIs(ops) {
+  const total = ops.length;
+  const delays = ops.map((o) => calculateDelayInMinutes(o));
+  const lateOnly = delays.filter((m) => m > 0);
+  const lateCount = lateOnly.length;
+  const pctLate = total > 0 ? (lateCount / total) * 100 : 0;
+  return { total, lateCount, pctLate };
+}
+
+function groupLateByClient(ops) {
+  const map = {};
+  for (const o of ops) {
+    const dmin = calculateDelayInMinutes(o);
+    if (dmin <= 0) continue;
+    const cli = o.Cliente || "(Sem Nome)";
+    map[cli] = (map[cli] || 0) + 1;
+  }
+  const arr = Object.entries(map).map(([cliente, count]) => ({ cliente, count }));
+  arr.sort((a, b) => b.count - a.count);
+  return arr.slice(0, 5);
+}
+
+function groupDelayReasons(ops, topN = 5) {
+  const counts = {};
+  for (const o of ops) {
+    const dmin = calculateDelayInMinutes(o);
+    if (dmin <= 0) continue;
+
+    // ✅ CORREÇÃO 3: Garante que exibe "sem justificativa" (lowercase)
+    let reason = (o.JustificativaAtraso || "").trim().toLowerCase();
+    if (!reason || reason === "-") {
+      reason = "sem justificativa";
+    }
+
+    counts[reason] = (counts[reason] || 0) + 1;
+  }
+  const arr = Object.entries(counts).map(([reason, count]) => ({ reason, count }));
+  arr.sort((a, b) => b.count - a.count);
+  return arr.slice(0, topN);
+}
+
+// ------------------------------------------------------
+// TIMELINE (linha expandida da tabela)
+// ------------------------------------------------------
+function renderTimelineHTML(op) {
+  const delayMin = calculateDelayInMinutes(op);
+  const atrasoFmt = delayMin > 0 ? formatMinutesToHHMM(delayMin) : "ON TIME";
+
+  const steps = [
+    { title: "Programado", time: op.DataProgramada || "—", color: "bg-blue-600" },
+    {
+      title: "Em Execução",
+      time: op.DataChegada || "—",
+      color: delayMin > 0 ? "bg-red-600" : "bg-green-600",
+    },
+    { title: "Finalizado", time: "—", color: "bg-gray-400" },
+  ];
+
+  // oculta bloco "Motivo do Atraso" se for "sem justificativa"
+  const motivo = (op.JustificativaAtraso || "").trim().toLowerCase();
+
+  return `
+    <div class="text-[13px] leading-snug text-gray-800">
+      <div class="mb-3 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
+        <div><span class="font-semibold">Booking:</span> ${op.Booking}</div>
+        <div><span class="font-semibold">Container:</span> ${op.Container || op.containers || "—"}</div>
+        <div><span class="font-semibold">Cliente:</span> ${op.Cliente || "-"}</div>
+        <div><span class="font-semibold">Porto:</span> ${op.PortoOperacao || "-"}</div>
+        <div><span class="font-semibold">Prev. Início:</span> ${formatDateForDisplay(op.DataProgramada)}</div>
+        <div><span class="font-semibold">Início Exec.:</span> ${formatDateForDisplay(op.DataChegada)}</div>
+        <div><span class="font-semibold">Atraso:</span>
+          ${
+            delayMin > 0
+              ? `<span class="text-red-600 font-semibold">${atrasoFmt}</span>`
+              : `<span class="text-green-700 font-semibold uppercase">${atrasoFmt}</span>`
+          }
+        </div>
+        <div><span class="font-semibold">Tipo de Operação:</span> ${op.TipoOperacao || "-"}</div>
+      </div>
+      ${
+        motivo && motivo !== "sem justificativa"
+          ? `
+        <div class="mt-2 text-[12px] text-gray-700">
+          <span class="font-semibold">Motivo do Atraso:</span>
+          ${op.JustificativaAtraso}
+        </div>`
+          : ""
+      }
+      <div class="flex flex-col gap-4 text-[12px] mt-4">
+        ${steps
+          .map(
+            (s) => `
+          <div class="flex items-start gap-3">
+            <div class="tl-step-dot ${s.color}"></div>
+            <div>
+              <div class="font-semibold">${s.title}</div>
+              <div class="text-gray-600">${s.time}</div>
+            </div>
+          </div>`
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+// ------------------------------------------------------
+// RENDER TABELA (com paginação)
+// ------------------------------------------------------
+function renderOpsTable() {
+  if (!tableBodyEl) return;
+
+  updatePagination();
+  const opsToRender = getPaginatedOps();
+
+  if (opsToRender.length === 0) {
+    tableBodyEl.innerHTML = `
+      <tr>
+        <td colspan="7" class="px-4 py-6 text-center text-gray-500">
+          Nenhuma operação encontrada com os filtros aplicados.
+        </td>
+      </tr>`;
+    updatePaginationUI();
+    renderLateAlert();
     return;
   }
 
-  querySnapshot.forEach((snap) => {
-    const user = snap.data();
-    const tr = document.createElement("tr");
+  const html = opsToRender
+    .map((op) => {
+      const delayMin = calculateDelayInMinutes(op);
+      const atrasoText = delayMin > 0 ? formatMinutesToHHMM(delayMin) : "ON TIME";
+      const isLate = delayMin > 0;
 
-    const tdEmail = document.createElement("td");
-    tdEmail.className = "px-6 py-4 text-sm";
-    tdEmail.textContent = user.email || "";
-    tr.appendChild(tdEmail);
+      const rowId = `row-${op.Booking}-${Math.random().toString(36).substr(2, 9)}`;
+      const isExpanded = state.expandedBooking === op.Booking;
 
-    const tdSelect = document.createElement("td");
-    tdSelect.className = "px-6 py-4 text-sm";
+      let rowHtml = `
+      <tr id="${rowId}" class="hover:bg-gray-50 cursor-pointer transition-colors" data-booking="${
+        op.Booking || ""
+      }">
+        <td class="px-6 py-3 font-medium text-gray-900 col-booking">${op.Booking || "—"}</td>
+        <td class="px-6 py-3 text-gray-700 col-shipper" title="${op.Cliente || ""}">${
+        op.Cliente || "—"
+      }</td>
+        <td class="px-6 py-3 text-gray-700 col-porto" title="${op.PortoOperacao || ""}">${
+        op.PortoOperacao || "—"
+      }</td>
+        <td class="px-6 py-3 text-gray-700 col-previsao">${formatDateForDisplay(
+          op.DataProgramada
+        )}</td>
+        <td class="px-6 py-3 text-gray-700 col-exec">${formatDateForDisplay(
+          op.DataChegada
+        )}</td>
+        <td class="px-6 py-3 text-center col-atraso ${
+          isLate ? "text-red-600 font-bold" : "text-green-600"
+        }">${atrasoText}</td>
+        <td class="px-6 py-3 text-gray-600 text-sm col-motivo" title="${
+          op.JustificativaAtraso || "Nenhum motivo informado"
+        }">${op.JustificativaAtraso}</td>
+      </tr>`;
 
-    const shipperSelect = document.createElement("select");
-    shipperSelect.className = "border rounded px-2 py-1 mr-2";
-    const roleSelect = document.createElement("select");
-    roleSelect.className = "border rounded px-2 py-1";
+      if (isExpanded) {
+        rowHtml += `
+        <tr class="detail-row" id="${rowId}-detail">
+          <td colspan="7" class="detail-cell">${renderTimelineHTML(op)}</td>
+        </tr>`;
+      }
+      return rowHtml;
+    })
+    .join("");
 
-    const def = document.createElement("option");
-    def.value = "";
-    def.textContent = "Selecionar Embarcador";
-    shipperSelect.appendChild(def);
-    uniqueShippers.forEach((s) => {
-      const o = document.createElement("option");
-      o.value = s;
-      o.textContent = s;
-      shipperSelect.appendChild(o);
+  tableBodyEl.innerHTML = html;
+
+  const rows = tableBodyEl.querySelectorAll("tr[data-booking]");
+  rows.forEach((row) => {
+    row.addEventListener("click", () => {
+      const booking = row.getAttribute("data-booking");
+      state.expandedBooking = state.expandedBooking === booking ? null : booking;
+      renderOpsTable();
     });
-
-    ["embarcador", "admin"].forEach((r) => {
-      const o = document.createElement("option");
-      o.value = r;
-      o.textContent = r;
-      roleSelect.appendChild(o);
-    });
-
-    tdSelect.appendChild(shipperSelect);
-    tdSelect.appendChild(roleSelect);
-    tr.appendChild(tdSelect);
-
-    const tdActions = document.createElement("td");
-    tdActions.className = "px-6 py-4 text-sm";
-
-    const approve = document.createElement("button");
-    approve.className = "bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded mr-2";
-    approve.textContent = "Aprovar";
-    approve.onclick = async () => {
-      if (!shipperSelect.value || !roleSelect.value)
-        return alert("Selecione um embarcador e uma função.");
-      await updateUserStatus(db, snap.id, "approved", {
-        associatedShipper: shipperSelect.value,
-        role: roleSelect.value,
-      });
-    };
-
-    const reject = document.createElement("button");
-    reject.className = "bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded";
-    reject.textContent = "Rejeitar";
-    reject.onclick = async () => {
-      await updateUserStatus(db, snap.id, "rejected");
-    };
-
-    tdActions.appendChild(approve);
-    tdActions.appendChild(reject);
-    tr.appendChild(tdActions);
-
-    tableBody.appendChild(tr);
-  });
-};
-
-/* ------------------------------------------------------------------ */
-/* UPLOAD/LIMPAR                                                       */
-/* ------------------------------------------------------------------ */
-const ensureXLSX = async () => {
-  if (window.XLSX) return window.XLSX;
-
-  for (let i = 0; i < 20; i++) {
-    if (window.XLSX) return window.XLSX;
-    await new Promise(r => setTimeout(r, 100));
-  }
-
-  const tryLoad = (url) => new Promise((resolve) => {
-    const prev = document.getElementById("xlsx-lib");
-    if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
-
-    const s = document.createElement("script");
-    s.id = "xlsx-lib";
-    s.src = url;
-    s.async = true;
-    s.crossOrigin = "anonymous";
-    document.head.appendChild(s);
-
-    const timeout = setTimeout(() => resolve(null), 5000);
-    s.onload = () => { clearTimeout(timeout); resolve(window.XLSX || null); };
-    s.onerror = () => { clearTimeout(timeout); resolve(null); };
   });
 
-  let lib = await tryLoad("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.full.min.js");
-  if (!lib) lib = await tryLoad("https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js");
+  updatePaginationUI();
+  renderLateAlert();
+}
 
-  return lib;
-};
-
-// Remove/normaliza qualquer undefined (profundamente)
-const stripUndefinedDeep = (val) => {
-  if (Array.isArray(val)) {
-    // normaliza cada item e remove itens 100% undefined
-    return val.map(stripUndefinedDeep).filter(v => v !== undefined);
+// ------------------------------------------------------
+// ALERTA DE ATRASO
+// ------------------------------------------------------
+function renderLateAlert() {
+  const lateOps = state.viewOps.filter((o) => calculateDelayInMinutes(o) > 0);
+  if (lateOps.length === 0) {
+    if (lateAlertMsgEl) lateAlertMsgEl.textContent = "Nenhuma operação atrasada no filtro atual.";
+    if (lateAlertBoxEl) lateAlertBoxEl.classList.add("hidden");
+  } else {
+    if (lateAlertMsgEl)
+      lateAlertMsgEl.textContent = `⚠ ${lateOps.length} operação(ões) em atraso neste filtro.`;
+    if (lateAlertBoxEl) lateAlertBoxEl.classList.remove("hidden");
   }
-  if (val && typeof val === "object") {
-    const out = {};
-    for (const [k, v] of Object.entries(val)) {
-      const sv = stripUndefinedDeep(v);
-      if (sv !== undefined) out[k] = sv; // não escreve chaves undefined
-    }
-    return out;
+}
+
+// ------------------------------------------------------
+// GRÁFICOS (Chart.js)
+// ------------------------------------------------------
+function initCharts() {
+  if (typeof Chart === "undefined") {
+    console.warn("Chart.js não está carregado no HTML.");
+    return;
   }
-  // em folhas: converte undefined -> null (Firestore permite null)
-  return val === undefined ? null : val;
-};
 
-const handleFileUpload = async (event, db, dataRef) => {
-  const input = event.target;
-  const file = input.files && input.files[0];
-  const statusEl = document.getElementById("upload-status");
-  const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+  if (delayChartCanvas && !state.charts.delayChart) {
+    state.charts.delayChart = new Chart(delayChartCanvas, {
+      type: "bar",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Qtde de processos atrasados",
+            data: [],
+            backgroundColor: "rgba(59, 130, 246, 0.6)",
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: "y",
+        plugins: { legend: { display: true, labels: { font: { size: 11 } } } },
+        scales: {
+          x: {
+            ticks: { color: "#6b7280", font: { size: 10 } },
+            grid: { color: "#e5e7eb" },
+          },
+          y: {
+            ticks: { color: "#1f2937", font: { size: 10 } },
+            grid: { color: "#f3f4f6" },
+          },
+        },
+      },
+    });
 
-  if (!file) { setStatus("Nenhum ficheiro selecionado."); return; }
+    delayChartCanvas.onclick = (evt) => {
+      const points = state.charts.delayChart.getElementsAtEventForMode(
+        evt,
+        "nearest",
+        { intersect: true },
+        false
+      );
+      if (!points.length) return;
+      const firstPoint = points[0];
+      const label = state.charts.delayChart.data.labels[firstPoint.index];
+      if (!label) return;
 
-  try {
-    setStatus("Carregando biblioteca XLSX...");
-    const XLSX = await ensureXLSX();
-    if (!XLSX) throw new Error("Falha ao carregar a biblioteca XLSX (CDN bloqueada?).");
+      state.filters.embarcadores = [label];
+      state.filters.status = "late";
 
-    setStatus(`Lendo arquivo: ${file.name} ...`);
-    const buffer = await file.arrayBuffer();
+      if (embarcadorChoices) {
+        embarcadorChoices.removeActiveItems();
+        embarcadorChoices.setValue([label]);
+      }
+      if (statusEl) statusEl.value = "late";
 
-    setStatus("Processando planilha...");
-    const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
-    const sheetName = workbook.SheetNames?.[0];
-    const sheet = sheetName ? workbook.Sheets[sheetName] : null;
-    if (!sheet) throw new Error("Planilha vazia ou inválida.");
-
-    const rawRows = XLSX.utils.sheet_to_json(sheet);
-    if (!Array.isArray(rawRows) || rawRows.length === 0)
-      throw new Error("Nenhuma linha encontrada na planilha.");
-
-    // normaliza cada linha
-    const normRows = rawRows.map(normalizeRowKeys)
-      // descartamos linhas totalmente vazias (sem nº programação e sem booking/container)
-      .filter(r => {
-        const hasKey = (r.NumeroProgramacao && r.NumeroProgramacao !== "") ||
-          (r.Booking && r.Booking !== "") ||
-          (r.Container && r.Container !== "");
-        return hasKey;
-      });
-
-    // chave principal = Número da programação; fallback = Booking-Container
-    const makeKey = (row) => {
-      const prog = (row.NumeroProgramacao || "").toString().trim();
-      if (prog) return `prog:${prog}`;
-      const b = (row.Booking || "").toString().trim();
-      const c = (row.Container || "").toString().trim();
-      return `bc:${b}-${c}`;
+      rerenderAll();
+      activateTab("tab-operacoes");
     };
+  }
 
-    // dentro do arquivo, mesclamos registros com a mesma chave (último ganha)
-    const uploadMap = new Map();
-    normRows.forEach((r) => {
-      const k = makeKey(r);
-      uploadMap.set(k, { ...uploadMap.get(k), ...r });
+  if (reasonsChartCanvas && !state.charts.reasonsChart) {
+    state.charts.reasonsChart = new Chart(reasonsChartCanvas, {
+      type: "doughnut",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            data: [],
+            backgroundColor: ["#0ea5e9", "#6366f1", "#10b981", "#facc15", "#ef4444"],
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: "bottom", labels: { font: { size: 11 }, color: "#374151" } },
+        },
+        cutout: "50%",
+      },
     });
+  }
+}
 
-    setStatus("Mesclando com dados existentes...");
-    const snap = await getDoc(dataRef);
-    const existing = snap.exists() ? (snap.data().records || []) : [];
-
-    const finalMap = new Map();
-    // 1) carrega existentes normalizados
-    existing.forEach((r) => {
-      const nr = normalizeRowKeys(r);
-      finalMap.set(makeKey(nr), nr);
-    });
-    // 2) sobrescreve/insere com o que veio no upload
-    for (const [k, r] of uploadMap.entries()) {
-      const prev = finalMap.get(k) || {};
-      finalMap.set(k, { ...prev, ...r });
+function updateCharts() {
+  if (!state.viewOps || state.viewOps.length === 0) {
+    if (state.charts.delayChart) {
+      state.charts.delayChart.data.labels = [];
+      state.charts.delayChart.data.datasets[0].data = [];
+      state.charts.delayChart.update();
     }
-
-    const finalRows = Array.from(finalMap.values());
-
-    const finalRowsClean = finalRows.map(stripUndefinedDeep);
-
-    setStatus("Gravando no Firestore...");
-    await setDoc(
-      dataRef,
-      { updatedAt: new Date().toISOString(), records: finalRowsClean },
-      { merge: true }
-    );
-
-    setStatus(`✅ Importados/atualizados ${uploadMap.size} registros. Total agora: ${finalRows.length}.`);
-    console.log("Upload concluído:", { atualizados: uploadMap.size, total: finalRows.length });
-  } catch (err) {
-    console.error("Falha no upload:", err);
-    setStatus(`❌ Erro no upload: ${err.message || err}`);
-  } finally {
-    try { input.value = ""; } catch (_) { }
-  }
-};
-
-const handleClearData = async (db, dataRef) => {
-  if (!confirm("Tem certeza? Esta ação é irreversível.")) return;
-  await setDoc(
-    dataRef,
-    { updatedAt: new Date().toISOString(), records: [] },
-    { merge: true }
-  );
-  alert("Dados limpos com sucesso.");
-};
-
-/* ------------------------------------------------------------------ */
-/* FILTROS + RENDER                                                    */
-/* ------------------------------------------------------------------ */
-const norm = (s) => (s ?? "").toString().trim().toLowerCase();
-
-const applyFiltersAndRender = () => {
-  const { clients, booking, date } = getFilters();
-
-  // remove operações Canceladas ANTES de qualquer cálculo/render
-  let filtered = [...allData].filter(
-    (r) => !norm(r.SituacaoProgramacao).includes("cancelada")
-  );
-
-  if (clients.length) {
-    const set = new Set(clients.map(norm));
-    filtered = filtered.filter((r) => set.has(norm(r.Cliente)));
+    if (state.charts.reasonsChart) {
+      state.charts.reasonsChart.data.labels = [];
+      state.charts.reasonsChart.data.datasets[0].data = [];
+      state.charts.reasonsChart.update();
+    }
+    if (reasonsBarsEl) reasonsBarsEl.innerHTML = "";
+    return;
   }
 
-  if (booking) {
-    const t = norm(booking);
-    filtered = filtered.filter(
-      (r) =>
-        norm(r.Booking).includes(t) ||
-        norm(r.Container).includes(t) ||
-        norm(r.PortoOperacao).includes(t)
-    );
+  const lateByClient = groupLateByClient(state.viewOps);
+  const reasonsArr = groupDelayReasons(state.viewOps, 5);
+
+  if (state.charts.delayChart) {
+    state.charts.delayChart.data.labels = lateByClient.map((x) => x.cliente);
+    state.charts.delayChart.data.datasets[0].data = lateByClient.map((x) => x.count);
+    state.charts.delayChart.update();
   }
 
-  if (date) {
-    filtered = filtered.filter((r) => {
-      if (!r.DataProgramada) return false;
-      const d = parseDate(r.DataProgramada);
-      return d && d.toISOString().slice(0, 10) === date;
+  if (state.charts.reasonsChart) {
+    state.charts.reasonsChart.data.labels = reasonsArr.map((x) => x.reason);
+    state.charts.reasonsChart.data.datasets[0].data = reasonsArr.map((x) => x.count);
+    state.charts.reasonsChart.update();
+  }
+
+  if (reasonsBarsEl) {
+    reasonsBarsEl.innerHTML = reasonsArr
+      .map(
+        (r) => `
+        <div class="flex items-center justify-between text-[13px] px-2 py-1 bg-gray-50 rounded border border-gray-200">
+          <span class="font-medium text-gray-800">${r.reason}</span>
+          <span class="text-gray-600">${r.count}</span>
+        </div>`
+      )
+      .join("");
+  }
+}
+
+// ------------------------------------------------------
+// KPIs do Dashboard + cliques
+// ------------------------------------------------------
+function renderKPIs() {
+  const k = buildKPIs(state.allOps);
+  if (totalOpsEl) totalOpsEl.textContent = k.total;
+  if (delayedOpsEl) delayedOpsEl.textContent = k.lateCount;
+  if (onTimeOpsEl) onTimeOpsEl.textContent = k.total - k.lateCount;
+  if (delayedOpsPctEl) delayedOpsPctEl.textContent = k.pctLate.toFixed(1) + "%";
+  updateCharts();
+}
+
+function wireKpiClicks() {
+  if (totalOpsCard) {
+    totalOpsCard.addEventListener("click", () => {
+      state.filters = {
+        embarcadores: [],
+        status: "all",
+        range: "all",
+        search: "",
+        date: "",
+      };
+      if (statusEl) statusEl.value = "all";
+      if (rangeEl) rangeEl.value = "all";
+      if (bookingEl) bookingEl.value = "";
+      if (dateEl) dateEl.value = "";
+      if (embarcadorChoices) embarcadorChoices.removeActiveItems();
+
+      rerenderAll();
+      activateTab("tab-operacoes");
     });
   }
 
-  currentlyDisplayedData = filtered;
-  renderData(filtered, allData);
-};
-
-const handleDashboardClick = (type) => {
-  if (type === "all") {
-    showDetailsScreen("Detalhes das Operações (Filtro Ativo)", currentlyDisplayedData);
-  } else if (type === "onTime") {
-    const ontime = currentlyDisplayedData.filter((r) => calculateDelayInMinutes(r) <= 0);
-    showDetailsScreen("Detalhes - Operações On Time (Filtro Ativo)", ontime);
-  } else if (type === "delayed") {
-    const delayed = currentlyDisplayedData.filter((r) => calculateDelayInMinutes(r) > 0);
-    showDetailsScreen("Detalhes - Operações com Atraso (Filtro Ativo)", delayed);
+  // ✅ CORREÇÃO 1: Card "on time" agora funciona corretamente
+  if (onTimeOpsCard) {
+    onTimeOpsCard.addEventListener("click", () => {
+      state.filters.status = "ontime";
+      if (statusEl) statusEl.value = "ontime";
+      rerenderAll();
+      activateTab("tab-operacoes");
+    });
   }
-};
 
-/* ------------------------------------------------------------------ */
-/* E-MAIL .EML (download)                                             */
-/* ------------------------------------------------------------------ */
-const downloadBlob = (name, blob) => {
+  // ✅ CORREÇÃO 1: Card "atrasados" agora funciona corretamente
+  if (delayedOpsCard) {
+    delayedOpsCard.addEventListener("click", () => {
+      state.filters.status = "late";
+      if (statusEl) statusEl.value = "late";
+      rerenderAll();
+      activateTab("tab-operacoes");
+    });
+  }
+}
+
+// ------------------------------------------------------
+// E-MAIL
+// ------------------------------------------------------
+function buildEmailTableHTML(lateOps) {
+  const rowsHtml = lateOps
+    .map((op) => {
+      const delayMin = calculateDelayInMinutes(op);
+      const atrasoFmt = delayMin > 0 ? formatMinutesToHHMM(delayMin) : "ON TIME";
+      return `
+        <tr>
+          <td>${op.Booking || "-"}</td>
+          <td>${op.Container || op.containers || "—"}</td>
+          <td>${op.Cliente || "-"}</td>
+          <td>${op.PortoOperacao || "-"}</td>
+          <td>${op.TipoOperacao || "-"}</td>
+          <td>${formatDateForDisplay(op.DataProgramada)}</td>
+          <td>${atrasoFmt}</td>
+        </tr>`;
+    })
+    .join("");
+
+  return `
+<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-size:12px;">
+  <thead style="background:#f2f2f2;font-weight:bold;">
+    <tr>
+      <td>Booking</td>
+      <td>Container</td>
+      <td>Embarcador</td>
+      <td>Porto</td>
+      <td>Tipo de Operação</td>
+      <td>Prev. Início</td>
+      <td>Atraso</td>
+    </tr>
+  </thead>
+  <tbody>${rowsHtml}</tbody>
+</table>`.trim();
+}
+
+function buildEmailDraft(lateOps) {
+  const tableHtml = buildEmailTableHTML(lateOps);
+  return [
+    "Prezados(as),",
+    "",
+    "Identificamos as operações abaixo com início em atraso em relação à previsão inicial.",
+    "Nossa equipe já está atuando para mitigar o impacto operacional, ajustar recursos e confirmar uma nova previsão de chegada.",
+    "Assim que tivermos uma nova confirmação de janela/atendimento, retornaremos imediatamente.",
+    "",
+    tableHtml,
+    "",
+    "Seguimos monitorando as atividades em tempo real e permanecemos à disposição para qualquer necessidade urgente.",
+    "",
+    "Atenciosamente,",
+    "Time de Operações / Mercosul Line",
+  ].join("\n");
+}
+
+function generateEmlAndDownload() {
+  const lateOps = state.viewOps.filter((o) => calculateDelayInMinutes(o) > 0);
+  const htmlBody = buildEmailTableHTML(lateOps);
+
+  const subject = "Atualização de Operações em Atraso";
+  const from = "tracking@mercosul-line.com";
+  const to = "cliente@exemplo.com";
+
+  const emlContent = [
+    `Subject: ${subject}`,
+    `From: ${from}`,
+    `To: ${to}`,
+    "MIME-Version: 1.0",
+    'Content-Type: text/html; charset="UTF-8"',
+    "",
+    '<html><body style="font-family:Arial, sans-serif; font-size:12px; color:#000;">',
+    "<p>Prezados(as),</p>",
+    "<p>Identificamos as operações abaixo com início em atraso em relação à previsão inicial. Nossa equipe já está atuando para mitigar impacto operacional e confirmar nova previsão de chegada.</p>",
+    htmlBody,
+    "<p>Assim que houver nova confirmação de janela/atendimento, retornaremos.</p>",
+    "<p>Atenciosamente,<br/>Time de Operações / Mercosul Line</p>",
+    "</body></html>",
+  ].join("\r\n");
+
+  const blob = new Blob([emlContent], { type: "message/rfc822" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = name;
+  a.download = "operacoes_atraso.eml";
   document.body.appendChild(a);
   a.click();
-  a.remove();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
-};
+}
 
-const rowsToEmailTable = (rows) => {
-  const th = (t) => `<th style="border:1px solid #e5e7eb;padding:8px;background:#f9fafb;text-align:left">${t}</th>`;
-  const td = (t) => `<td style="border:1px solid #e5e7eb;padding:8px">${t ?? ""}</td>`;
+function openEmailPreview() {
+  const lateOps = state.viewOps.filter((o) => calculateDelayInMinutes(o) > 0);
+  const draft = buildEmailDraft(lateOps);
+  if (emailDraftEl) emailDraftEl.value = draft;
+  if (emailPreviewEl) emailPreviewEl.classList.remove("hidden");
+}
 
-  const header =
-    `<tr>
-      ${th("Booking")}${th("Cliente")}${th("Container")}${th("Porto")}
-      ${th("Previsão Início")}${th("Início Execução")}${th("Atraso")}
-    </tr>`;
+function closeEmailPreviewModal() {
+  if (emailPreviewEl) emailPreviewEl.classList.add("hidden");
+}
 
-  const body = rows.map(r => {
-    const m = calculateDelayInMinutes(r);
-    const atraso = (m ?? 0) > 0 ? formatMinutesToHHMM(m) : "ON TIME";
-    return `<tr>
-      ${td(r.Booking || "-")}${td(r.Cliente || "-")}${td(r.Container || "-")}${td(r.PortoOperacao || "-")}
-      ${td(formatDateForDisplay(r.DataProgramada) || "-")}
-      ${td(formatDateForDisplay(r.DataChegada) || "-")}
-      ${td(atraso)}
-    </tr>`;
-  }).join("");
+// ------------------------------------------------------
+// RENDER GERAL
+// ------------------------------------------------------
+function rerenderAll() {
+  applyFiltersAndSort();
+  renderOpsTable();
+  renderKPIs();
+}
 
-  return `<table style="border-collapse:collapse;width:100%;font-family:Inter,Arial,sans-serif;font-size:14px;margin:12px 0">
-            <thead>${header}</thead><tbody>${body}</tbody></table>`;
-};
+// ------------------------------------------------------
+// MULTISELECT / FILTROS / SORT / AÇÕES
+// ------------------------------------------------------
+function wirePagination() {
+  if (itemsPerPageSelect) {
+    itemsPerPageSelect.addEventListener("change", (e) => {
+      changeItemsPerPage(e.target.value);
+    });
+  }
+  if (prevPageBtn) {
+    prevPageBtn.addEventListener("click", () => {
+      goToPage(state.pagination.currentPage - 1);
+    });
+  }
+  if (nextPageBtn) {
+    nextPageBtn.addEventListener("click", () => {
+      goToPage(state.pagination.currentPage + 1);
+    });
+  }
+}
 
-const generateDelayedEmailEML = () => {
-  const { clients } = getFilters();
-  const source = clients.length ? currentlyDisplayedData : allData;
+function populateEmbarcadorChoices() {
+  const unique = Array.from(
+    new Set(state.allOps.map((op) => op.Cliente).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+  if (embarcadorSelectEl) {
+    embarcadorSelectEl.innerHTML = unique
+      .map(
+        (cli) =>
+          `<option value="${cli.replace(/"/g, "&quot;")}">${cli}</option>`
+      )
+      .join("");
+  }
+  if (embarcadorChoices) embarcadorChoices.destroy();
 
-  const delayed = source.filter(r => (calculateDelayInMinutes(r) ?? 0) > 0);
-  if (!delayed.length) {
-    alert("Nenhuma operação atrasada para compor o e-mail.");
+  // Só instancia Choices se a lib estiver carregada
+  if (window?.Choices) {
+    embarcadorChoices = new Choices(embarcadorSelectEl, {
+      removeItemButton: true,
+      shouldSort: false,
+      placeholderValue: "Selecione um ou mais embarcadores",
+      searchPlaceholderValue: "Buscar...",
+    });
+  } else {
+    console.warn("Choices.js não está carregado; usando <select multiple> nativo.");
+  }
+}
+
+function wireFiltersAndActions() {
+  if (embarcadorSelectEl) {
+    embarcadorSelectEl.addEventListener("change", () => {
+      state.filters.embarcadores = Array.from(embarcadorSelectEl.selectedOptions).map(
+        (o) => o.value
+      );
+      rerenderAll();
+    });
+  }
+  if (statusEl) {
+    statusEl.addEventListener("change", () => {
+      state.filters.status = statusEl.value;
+      rerenderAll();
+    });
+  }
+  if (rangeEl) {
+    rangeEl.addEventListener("change", () => {
+      state.filters.range = rangeEl.value;
+      rerenderAll();
+    });
+  }
+  if (bookingEl) {
+    bookingEl.addEventListener("input", () => {
+      state.filters.search = bookingEl.value.trim();
+      rerenderAll();
+    });
+  }
+  if (dateEl) {
+    dateEl.addEventListener("change", () => {
+      state.filters.date = dateEl.value;
+      rerenderAll();
+    });
+  }
+
+  if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener("click", () => {
+      state.filters = {
+        embarcadores: [],
+        status: "all",
+        range: "all",
+        search: "",
+        date: "",
+      };
+      if (statusEl) statusEl.value = "all";
+      if (rangeEl) rangeEl.value = "all";
+      if (bookingEl) bookingEl.value = "";
+      if (dateEl) dateEl.value = "";
+      if (embarcadorChoices) embarcadorChoices.removeActiveItems();
+      rerenderAll();
+    });
+  }
+
+  if (tableHeadEl) {
+    const ths = tableHeadEl.querySelectorAll("th.sortable-header");
+    ths.forEach((th) => {
+      th.addEventListener("click", () => {
+        const field = th.getAttribute("data-sort");
+        if (!field) return;
+        if (state.sort.field === field) state.sort.asc = !state.sort.asc;
+        else {
+          state.sort.field = field;
+          state.sort.asc = true;
+        }
+        rerenderAll();
+      });
+    });
+  }
+
+  if (copyEmailBtn) copyEmailBtn.addEventListener("click", generateEmlAndDownload);
+  if (sendEmailBtn) sendEmailBtn.addEventListener("click", openEmailPreview);
+  if (openDiaryBtn)
+    openDiaryBtn.addEventListener("click", () => {
+      window.open("https://diario-bordo.netlify.app/", "_blank");
+    });
+  if (closeEmailBtn) closeEmailBtn.addEventListener("click", closeEmailPreviewModal);
+
+  if (uploadFileEl) uploadFileEl.addEventListener("change", handleFileChosen);
+  if (clearDataBtn) clearDataBtn.addEventListener("click", handleClearData);
+
+  // ✅ Listeners da aba de Ocorrências
+  if (ocorrenciasSearchBtn) {
+    ocorrenciasSearchBtn.addEventListener("click", () => {
+      state.ocorrenciasFilter.booking = ocorrenciasFilterBooking?.value || "";
+      state.ocorrenciasFilter.tipo = ocorrenciasFilterTipo?.value || "";
+      loadOcorrencias();
+    });
+  }
+
+  if (ocorrenciasFilterBooking) {
+    ocorrenciasFilterBooking.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        state.ocorrenciasFilter.booking = ocorrenciasFilterBooking.value || "";
+        state.ocorrenciasFilter.tipo = ocorrenciasFilterTipo?.value || "";
+        loadOcorrencias();
+      }
+    });
+  }
+}
+
+// ------------------------------------------------------
+// UPLOAD DE DADOS (VERSÃO CORRIGIDA)
+// ------------------------------------------------------
+async function handleFileChosen(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const fileName = file.name.toLowerCase();
+  const setStatus = (msg) => {
+    const el = uploadStatusEl || document.getElementById("upload-status");
+    if (el) el.textContent = msg;
+  };
+
+  // 1. Validação do tipo de arquivo
+  const allowedExts = APP_CONFIG?.acceptedFileTypes || [".xlsx", ".xls", ".csv"];
+  const isValidType = allowedExts.some((ext) => fileName.endsWith(ext));
+
+  if (!isValidType) {
+    Toast?.error?.("Formato não suportado. Use: .xlsx, .xls ou .csv");
+    setStatus("Erro: formato não suportado");
+    e.target.value = "";
     return;
   }
 
-  let subjectClient = "Operações";
-  if (clients.length === 1) {
-    subjectClient = clients[0];
-  } else {
-    const uniq = [...new Set(delayed.map(r => r.Cliente).filter(Boolean))];
-    subjectClient = uniq.length === 1 ? uniq[0] : "Clientes Diversos";
+  // 2. Validação do tamanho
+  const maxSize = Number(APP_CONFIG?.maxFileSize ?? 10 * 1024 * 1024); // 10MB padrão
+  if (file.size > maxSize) {
+    Toast?.error?.("Arquivo muito grande. Tamanho máximo: 10MB");
+    setStatus("Erro: arquivo muito grande");
+    e.target.value = "";
+    return;
   }
 
-  const subject = `Aviso de Atraso - ${subjectClient}`;
-  const bodyHtml = `
-  <div style="font-family:Inter,Arial,sans-serif;font-size:14px;color:#111">
-    <p>Prezada equipe ${subjectClient},</p>
-    <p>Gostaríamos de informar que identificamos atraso nas seguintes operações:</p>
-    ${rowsToEmailTable(delayed)}
-    <p>Estamos trabalhando para apurar a nova previsão de chegada. Você receberá um e-mail subsequente com a previsão atualizada assim que a informação for confirmada.</p>
-    <p>Atenciosamente,<br/>Mercosul Line</p>
-  </div>`.trim();
+  Loading?.show?.("Lendo arquivo...");
+  setStatus("Lendo arquivo...");
 
-  const headers = [
-    "From: Mercosul Line <no-reply@mercosulline.local>",
-    "To: destinatario@exemplo.com",
-    `Subject: ${subject}`,
-    `Date: ${new Date().toUTCString()}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/html; charset=UTF-8"
-  ].join("\r\n");
-
-  const eml = `${headers}\r\n\r\n${bodyHtml}`;
-  const slug = subjectClient.toLowerCase().replace(/[^\w]+/g, "-");
-  downloadBlob(`aviso_atraso_${slug}.eml`, new Blob([eml], { type: "message/rfc822" }));
-};
-
-/* ------------------------------------------------------------------ */
-/* DIÁRIO DE BORDO (substitui Exportar Excel)                          */
-/* ------------------------------------------------------------------ */
-const wireLogbookLink = () => {
-  const btn = document.getElementById("export-excel");
-  if (!btn) return;
-
-  // abrimos direto no link fixo do Diário de Bordo
-  const url = "https://diario-bordo.netlify.app/";
-
-  btn.textContent = "Abrir Diário de Bordo";
-  btn.addEventListener("click", () => {
-    window.open(url, "_blank");
-  });
-};
-
-/* ------------------------------------------------------------------ */
-/* INICIALIZAÇÃO                                                       */
-/* ------------------------------------------------------------------ */
-const initializeAdminPage = (auth, db, user) => {
-  getDoc(doc(db, "users", user.uid)).then((snap) => {
-    const d = snap.data();
-    if (d?.role === "admin") {
-      const sec = document.getElementById("user-management-section");
-      if (sec) sec.classList.remove("hidden");
-    }
-  });
-
-  const logoutButton = document.getElementById("logout-button");
-  if (logoutButton) logoutButton.addEventListener("click", () => signOut(auth).then(() => (window.location.href = "index.html")));
-
-  const dataRef = doc(db, "tracking_data", "latest");
-
-  const uploadInput = document.getElementById("upload-file");
-  if (uploadInput) uploadInput.addEventListener("change", (e) => handleFileUpload(e, db, dataRef));
-
-  const clearDataBtn = document.getElementById("clear-data-btn");
-  if (clearDataBtn) clearDataBtn.addEventListener("click", () => handleClearData(db, dataRef));
-
-  document.getElementById("compose-email-btn")?.addEventListener("click", generateDelayedEmailEML);
-  document.getElementById("send-email-btn")?.addEventListener("click", generateDelayedEmailEML);
-
-  wireLogbookLink();
-
-  initializeUI(applyFiltersAndRender, (type) => {
-    if (type === "all") handleDashboardClick("all");
-    if (type === "onTime") handleDashboardClick("onTime");
-    if (type === "delayed") handleDashboardClick("delayed");
-  });
-
-  onSnapshot(dataRef, (snap) => {
-    const data = snap.exists() ? (snap.data().records || []) : [];
-    allData = Array.isArray(data) ? data : [];
-    populateClientFilter(allData);
-    applyFiltersAndRender();
-    displayPendingUsers(db);
-  });
-};
-
-const checkAuth = async () => {
   try {
-    const config = JSON.parse(__firebase_config);
-    const app = initializeApp(config);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
+    // 3. Garante que as libs XLSX e Papa estão carregadas
+    const { XLSX, Papa } = await ensureLibs();
 
-    onAuthStateChanged(auth, (user) => {
-      if (user) initializeAdminPage(auth, db, user);
-      else window.location.href = "index.html";
+    let records = [];
+
+    // 4. Processa CSV
+    if (fileName.endsWith(".csv")) {
+      if (!Papa) {
+        throw new Error("PapaParse não está carregado. Inclua no HTML.");
+      }
+
+      const text = await file.text();
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        encoding: "UTF-8",
+      });
+
+      if (parsed.errors.length > 0) {
+        console.warn("Avisos do PapaParse:", parsed.errors);
+      }
+
+      records = parsed.data || [];
+    }
+    // 5. Processa XLSX/XLS
+    else {
+      if (!XLSX) {
+        throw new Error("XLSX não está carregado. Inclua no HTML.");
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: "array" });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      records = XLSX.utils.sheet_to_json(firstSheet, { raw: false, defval: null });
+    }
+
+    // 6. Validação dos dados
+    if (!records || records.length === 0) {
+      Toast?.warning?.("Arquivo vazio ou sem dados válidos");
+      setStatus("Aviso: arquivo vazio");
+      Loading?.hide?.();
+      return;
+    }
+
+    console.log(`📄 ${records.length} linhas encontradas no arquivo`);
+    Loading?.show?.(`Processando ${records.length} linhas...`);
+
+    // 7. Normaliza os dados
+    const normalized = records
+      .map((row, idx) => {
+        try {
+          return normalizeRecord(row, idx);
+        } catch (err) {
+          console.warn(`Linha ${idx + 1} com erro:`, err.message);
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    if (normalized.length === 0) {
+      Toast?.error?.("Nenhum registro válido encontrado no arquivo");
+      setStatus("Erro: nenhum registro válido");
+      Loading?.hide?.();
+      return;
+    }
+
+    console.log(`✅ ${normalized.length} registros normalizados`);
+    Loading?.show?.(`Enviando ${normalized.length} registros para o servidor...`);
+
+    // 8. Envia para o backend
+    const resp = await fetch(`${API_BASE}/admin/importOperations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ records: normalized }),
     });
-  } catch (err) {
-    console.error("Erro ao inicializar o Firebase:", err);
-  }
-};
 
-document.addEventListener("DOMContentLoaded", checkAuth);
+    const data = await resp.json().catch(() => ({}));
+    Loading?.hide?.();
+
+    if (!resp.ok || !data.success) {
+      console.error("Erro do backend:", data);
+      Toast?.error?.(data?.error || "Falha ao importar dados");
+      setStatus(`Erro: ${data?.error || "falha ao importar"}`);
+      throw new Error(data?.error || "Falha ao importar");
+    }
+
+    // 9. Sucesso!
+    const processed =
+      data.processed ?? (data.inserted || 0) + (data.updated || 0) + (data.skipped || 0);
+
+    Toast?.success?.(
+      `✅ Importação concluída!\n${data.inserted || 0} inseridos • ${
+        data.updated || 0
+      } atualizados • ${data.skipped || 0} ignorados`,
+      6000
+    );
+
+    setStatus(
+      `Importação OK: ${processed} processados (${data.inserted || 0} inseridos, ${
+        data.updated || 0
+      } atualizados, ${data.skipped || 0} ignorados)`
+    );
+
+    // 10. Recarrega os dados
+    await fetchAllOps();
+    rerenderAll();
+  } catch (err) {
+    console.error("❌ Erro no upload:", err);
+    Loading?.hide?.();
+
+    const msg = err?.message || "Falha ao processar arquivo";
+    Toast?.error?.(msg);
+    setStatus(`Erro: ${msg}`);
+  } finally {
+    e.target.value = "";
+  }
+}
+
+/**
+ * Normaliza um registro da planilha para o formato esperado pelo backend
+ */
+function normalizeRecord(row, idx) {
+  const booking = row.Booking || row.booking || row.BOOKING || null;
+  const cliente = row.Cliente || row.cliente || row.Embarcador || row.embarcador || null;
+  const container = row.Container || row.container || row.containers || null;
+  const tipoOp =
+    row["Tipo Operação"] ||
+    row.TipoOperacao ||
+    row.tipo_programacao ||
+    row.TipoProgramacao ||
+    null;
+  const porto =
+    row["Porto Operação"] || row.PortoOperacao || row.porto_operacao || null;
+  let justificativa =
+    row["Justificativa Atraso"] ||
+    row.JustificativaAtraso ||
+    row.justificativa_atraso ||
+    null;
+
+  // ✅ CORREÇÃO 3: Normaliza justificativa vazia
+  if (!justificativa || justificativa.trim() === "" || justificativa.trim() === "-") {
+    justificativa = "sem justificativa";
+  } else {
+    justificativa = justificativa.trim();
+  }
+
+  let dataProgramada =
+    row["Data Programada"] ||
+    row.DataProgramada ||
+    row.previsao_inicio_atendimento ||
+    null;
+  let dataChegada =
+    row["Data Chegada"] || row.DataChegada || row.dt_inicio_execucao || null;
+
+  if (dataProgramada) {
+    const parsed = Parse?.dateAuto?.(dataProgramada);
+    if (parsed) {
+      dataProgramada = Format?.dateTime?.(parsed) || dataProgramada;
+    } else {
+      console.warn(`Linha ${idx + 1}: Data Programada inválida:`, dataProgramada);
+      dataProgramada = null;
+    }
+  }
+
+  if (dataChegada) {
+    const parsed = Parse?.dateAuto?.(dataChegada);
+    if (parsed) {
+      dataChegada = Format?.dateTime?.(parsed) || dataChegada;
+    } else {
+      console.warn(`Linha ${idx + 1}: Data Chegada inválida:`, dataChegada);
+      dataChegada = null;
+    }
+  }
+
+  if (!booking) {
+    throw new Error(`Linha ${idx + 1}: Booking ausente`);
+  }
+
+  return {
+    Booking: booking,
+    Cliente: cliente,
+    Container: container,
+    TipoOperacao: tipoOp,
+    PortoOperacao: porto,
+    DataProgramada: dataProgramada,
+    DataChegada: dataChegada,
+    JustificativaAtraso: justificativa.toLowerCase(),
+  };
+}
+
+async function handleClearData() {
+  if (!confirm("Tem certeza? Isso vai remover TODAS as operações da base.")) return;
+  try {
+    const resp = await fetch(`${API_BASE}/admin/clearData`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const out = await resp.json();
+    if (!out.success) {
+      alert("Erro limpando dados: " + (out.error || "desconhecido"));
+    } else {
+      alert(`Dados removidos (${out.deleted} linhas). Vou recarregar a lista.`);
+      await fetchAllOps();
+      rerenderAll();
+    }
+  } catch (err) {
+    console.error("Erro clearData:", err);
+    alert("Falha na requisição de limpeza.");
+  }
+}
+
+// ------------------------------------------------------
+// APROVAÇÕES DE USUÁRIOS
+// ------------------------------------------------------
+async function renderPendingUsers() {
+  if (!pendingUsersTbody) return;
+
+  if (state.pendingUsers.length === 0) {
+    pendingUsersTbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="px-6 py-8 text-center text-gray-500">
+          Nenhum usuário pendente de aprovação.
+        </td>
+      </tr>`;
+    return;
+  }
+
+  // ✅ Buscar lista de embarcadores para o select
+  let embarcadores = [];
+  try {
+    const resp = await fetch(`${API_BASE}/admin/embarcadores`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const data = await resp.json();
+    if (data.success) {
+      embarcadores = data.embarcadores || [];
+    }
+  } catch (err) {
+    console.warn("Erro ao carregar embarcadores:", err);
+  }
+
+  pendingUsersTbody.innerHTML = state.pendingUsers
+    .map((u) => {
+      const tipoLabel =
+        u.tipo_conta === "internal" ? "Funcionário" : "Cliente/Embarcador";
+      const tipoColor =
+        u.tipo_conta === "internal"
+          ? "bg-blue-100 text-blue-700"
+          : "bg-green-100 text-green-700";
+
+      // ✅ Select de embarcadores (só aparece se tipo for 'shipper')
+      const embarcadorSelect =
+        u.tipo_conta === "shipper"
+          ? `
+        <select class="embarcador-select border border-gray-300 rounded-lg px-2 py-1 text-sm" data-user-id="${
+          u.id
+        }">
+          <option value="">Selecione...</option>
+          ${embarcadores
+            .map((emb) => `<option value="${emb.id}">${emb.nome}</option>`)
+            .join("")}
+        </select>
+      `
+          : '<span class="text-gray-400 text-xs">N/A</span>';
+
+      return `
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-3 text-gray-900">${u.email || "N/A"}</td>
+          <td class="px-6 py-3 text-gray-900">${u.nome || "N/A"}</td>
+          <td class="px-6 py-3 text-gray-700">${u.telefone || "N/A"}</td>
+          <td class="px-6 py-3 text-gray-700">${u.cpf || "N/A"}</td>
+          <td class="px-6 py-3">
+            <span class="px-2 py-1 rounded-full text-xs font-semibold ${tipoColor}">
+              ${tipoLabel}
+            </span>
+          </td>
+          <td class="px-6 py-3">
+            ${embarcadorSelect}
+          </td>
+          <td class="px-6 py-3">
+            <div class="flex gap-2">
+              <button class="approve-user bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" data-id="${
+                u.id
+              }">
+                ✓ Aprovar
+              </button>
+              <button class="reject-user bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" data-id="${
+                u.id
+              }">
+                ✗ Rejeitar
+              </button>
+            </div>
+          </td>
+        </tr>`;
+    })
+    .join("");
+
+  // Event listeners para aprovação/rejeição
+  pendingUsersTbody.querySelectorAll(".approve-user").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-id");
+      await approveUser(id);
+    });
+  });
+
+  pendingUsersTbody.querySelectorAll(".reject-user").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-id");
+      await rejectUser(id);
+    });
+  });
+}
+
+async function approveUser(id) {
+  try {
+    const pend = state.pendingUsers.find((u) => String(u.id) === String(id));
+    if (!pend) {
+      alert("Usuário não encontrado.");
+      return;
+    }
+
+    const asAdmin = confirm(
+      `Aprovar "${pend.nome}" como ADMIN?\n\nOK = ADMIN\nCancelar = ${
+        pend.tipo_conta === "internal" ? "Funcionário" : "Cliente/Embarcador"
+      }`
+    );
+
+    let body = { id };
+
+    if (asAdmin) {
+      body.role = "admin";
+    } else {
+      // ✅ Se não for admin, pegar o embarcador_id do select
+      if (pend.tipo_conta === "shipper") {
+        const selectEl = document.querySelector(
+          `.embarcador-select[data-user-id="${id}"]`
+        );
+        const embarcadorId = selectEl?.value;
+
+        if (!embarcadorId) {
+          alert("Por favor, selecione uma empresa/embarcador antes de aprovar.");
+          return;
+        }
+
+        body.role = "embarcador";
+        body.embarcador_id = parseInt(embarcadorId);
+      } else {
+        body.role = "funcionario";
+      }
+    }
+
+    const resp = await fetch(`${API_BASE}/admin/approveUser`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const out = await resp.json();
+
+    if (!out.success) {
+      alert("Erro ao aprovar usuário: " + (out.error || "desconhecido"));
+    } else {
+      alert("Usuário aprovado com sucesso!");
+      await fetchPendingUsers();
+      renderPendingUsers();
+    }
+  } catch (err) {
+    console.error("approveUser error:", err);
+    alert("Falha na requisição de aprovação.");
+  }
+}
+
+async function rejectUser(id) {
+  try {
+    const resp = await fetch(`${API_BASE}/admin/rejectUser`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ id }),
+    });
+    const out = await resp.json();
+    if (!out.success) {
+      alert("Erro rejeitando usuário: " + (out.error || "desconhecido"));
+    } else {
+      await fetchPendingUsers();
+      renderPendingUsers();
+    }
+  } catch (err) {
+    console.error("rejectUser error:", err);
+    alert("Falha na requisição de rejeição.");
+  }
+}
+
+// ------------------------------------------------------
+// GESTÃO DE OCORRÊNCIAS
+// ------------------------------------------------------
+async function loadOcorrencias() {
+  try {
+    const booking = state.ocorrenciasFilter.booking;
+    const tipo = state.ocorrenciasFilter.tipo;
+
+    let url = `${API_BASE}/admin/ocorrencias/list`;
+    const params = new URLSearchParams();
+
+    if (booking) params.append("booking", booking);
+    if (tipo) params.append("tipo", tipo);
+
+    if (params.toString()) {
+      url += "?" + params.toString();
+    }
+
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+
+    const data = await resp.json();
+
+    if (data.success) {
+      state.ocorrencias = data.ocorrencias || [];
+      renderOcorrencias();
+    } else {
+      console.error("Erro ao carregar ocorrências:", data);
+      state.ocorrencias = [];
+      renderOcorrencias();
+    }
+  } catch (err) {
+    console.error("Erro loadOcorrencias:", err);
+    state.ocorrencias = [];
+    renderOcorrencias();
+  }
+}
+
+function renderOcorrencias() {
+  if (!ocorrenciasList) return;
+
+  if (state.ocorrencias.length === 0) {
+    ocorrenciasList.innerHTML = `
+      <p class="text-gray-500 text-center py-8">
+        Nenhuma ocorrência encontrada. Use os filtros acima para buscar.
+      </p>
+    `;
+    return;
+  }
+
+  const html = state.ocorrencias
+    .map((occ) => {
+      const tipoIcons = {
+        inicio_operacao: "🚀",
+        fim_operacao: "✅",
+        atraso: "⏰",
+        problema_operacional: "⚠️",
+        observacao: "📝",
+      };
+
+      const tipoLabels = {
+        inicio_operacao: "Início de Operação",
+        fim_operacao: "Fim de Operação",
+        atraso: "Atraso",
+        problema_operacional: "Problema Operacional",
+        observacao: "Observação",
+      };
+
+      const icon = tipoIcons[occ.tipo] || "📋";
+      const tipoLabel = tipoLabels[occ.tipo] || occ.tipo;
+      const data = new Date(occ.data_registro).toLocaleString("pt-BR");
+
+      return `
+      <div class="glass-card p-4 border-l-4 ${
+        occ.tipo === "atraso" || occ.tipo === "problema_operacional"
+          ? "border-red-500"
+          : "border-blue-500"
+      }">
+        <div class="flex items-start justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">${icon}</span>
+            <div>
+              <h3 class="font-bold text-gray-900">${tipoLabel}</h3>
+              <p class="text-xs text-gray-500">${data}</p>
+            </div>
+          </div>
+          <span class="text-xs font-semibold px-3 py-1 rounded-full ${
+            occ.tipo === "atraso" || occ.tipo === "problema_operacional"
+              ? "bg-red-100 text-red-700"
+              : "bg-blue-100 text-blue-700"
+          }">
+            ${tipoLabel}
+          </span>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4 text-sm mb-3">
+          <div>
+            <span class="font-semibold text-gray-700">Booking:</span>
+            <span class="text-gray-900">${occ.booking || "N/A"}</span>
+          </div>
+          <div>
+            <span class="font-semibold text-gray-700">Container:</span>
+            <span class="text-gray-900">${occ.container || "N/A"}</span>
+          </div>
+        </div>
+        
+        <div class="text-sm">
+          <span class="font-semibold text-gray-700">Descrição:</span>
+          <p class="text-gray-900 mt-1">${occ.descricao || ""}</p>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+
+  ocorrenciasList.innerHTML = html;
+}
+
+// ------------------------------------------------------
+// FETCH DADOS DO BACKEND
+// ------------------------------------------------------
+async function fetchAllOps() {
+  const resp = await fetch(`${API_BASE}/admin/allOps`, {
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+  const out = await resp.json();
+  if (!out.success) {
+    console.error("Erro /admin/allOps:", out);
+    state.allOps = [];
+  } else {
+    state.allOps = normalizeOpsArray(out.items || []);
+  }
+  populateEmbarcadorChoices();
+  applyFiltersAndSort();
+}
+
+async function fetchPendingUsers() {
+  const resp = await fetch(`${API_BASE}/admin/pendingUsers`, {
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+  const out = await resp.json();
+  if (!out.success) {
+    console.warn("Nenhum usuário pendente ou erro:", out);
+    state.pendingUsers = [];
+  } else {
+    state.pendingUsers = out.users || [];
+  }
+}
+
+// ------------------------------------------------------
+// LOGOUT
+// ------------------------------------------------------
+function wireLogout() {
+  if (!logoutBtn) return;
+  logoutBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    await signOut(auth);
+    window.location.href = "index.html";
+  });
+}
+
+// ------------------------------------------------------
+// INIT AUTH + LOAD
+// ------------------------------------------------------
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    window.location.href = "index.html";
+    return;
+  }
+
+  authToken = await user.getIdToken(true);
+
+  try {
+    const who = await fetch(`${API_BASE}/auth/whoami`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const whoJson = await who.json();
+
+    if (!whoJson.success || whoJson.user?.status !== "ativo") {
+      alert("Usuário sem acesso ativo.");
+      window.location.href = "index.html";
+      return;
+    }
+    if (whoJson.user.role !== "admin") {
+      alert("Acesso restrito a administradores.");
+      window.location.href = "portal.html";
+      return;
+    }
+  } catch (err) {
+    console.error("Erro whoami:", err);
+    alert("Falha ao validar acesso administrativo.");
+    window.location.href = "index.html";
+    return;
+  }
+
+  await fetchAllOps();
+  await fetchPendingUsers();
+  // ✅ Carrega ocorrências na inicialização
+  await loadOcorrencias();
+
+  initCharts();
+  wireKpiClicks();
+  wireFiltersAndActions();
+  wirePagination();
+  wireLogout();
+
+  rerenderAll();
+  renderPendingUsers();
+
+  console.debug("✅ Admin.js inicializado com sucesso!");
+  console.debug("📊 Total de operações:", state.allOps.length);
+});

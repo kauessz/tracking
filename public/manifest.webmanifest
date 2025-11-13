@@ -1,0 +1,21 @@
+{
+  "name": "Rastreamento Mercosul",
+  "short_name": "Rastreio",
+  "start_url": "./portal.html",
+  "display": "standalone",
+  "background_color": "#0b2263",
+  "theme_color": "#0b2263",
+  "description": "Portal de operações, desempenho e acompanhamento de atrasos.",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

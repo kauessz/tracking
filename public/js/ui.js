@@ -140,6 +140,9 @@ export const renderTableRows = (tbody, rows) => {
 
     const lateClass = isLate ? ' bg-red-50' : '';
     const lateStyle = isLate ? ' style="background-color:#fdecec;"' : '';
+    
+    const container = r.Container || r.containers || '-';
+    const motivo = r.JustificativaAtraso || r.motivo_atraso || 'N/A';
 
     return `
       <tr class="main-row cursor-pointer${lateClass}"${lateStyle}
@@ -149,15 +152,16 @@ export const renderTableRows = (tbody, rows) => {
             Transportadora: r.Transportadora || '-',
             NumeroProgramacao: r.NumeroProgramacao || '-',
             NumeroCliente: r.NumeroCliente || '-',
-            Container: r.Container || '-'
+            Container: container
           }).replace(/'/g,"&apos;")}'>
         <td class="px-6 py-3 whitespace-nowrap">${r.Booking||'-'}</td>
+        <td class="px-6 py-3 whitespace-nowrap" title="${container}">${container}</td>
         <td class="px-6 py-3 whitespace-nowrap" title="${r.Cliente||'-'}">${r.Cliente||'-'}</td>
         <td class="px-6 py-3 whitespace-nowrap" title="${r.PortoOperacao||'-'}">${r.PortoOperacao||'-'}</td>
         <td class="px-6 py-3 whitespace-nowrap font-mono tabular-nums">${formatDateForDisplay(r.DataProgramada)||'-'}</td>
         <td class="px-6 py-3 whitespace-nowrap font-mono tabular-nums">${formatDateForDisplay(r.DataChegada)||'-'}</td>
         <td class="px-6 py-3 text-center">${delayDisp}</td>
-        <td class="px-6 py-3">${r.JustificativaAtraso||'N/A'}</td>
+        <td class="px-6 py-3">${motivo}</td>
       </tr>`;
   }).join('');
 };

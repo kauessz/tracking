@@ -1,397 +1,412 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Rastreamento</title>
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreamento | Mercosul Line</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="./css/style.css"/>
-  <meta name="theme-color" content="#0b2263"/>
-
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
   <style>
-    body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    .page-wrap { max-width: 80rem; margin: 0 auto; width: 100%; }
-    .topbar { background:#0b2263; color:#fff; padding:1rem; box-shadow:0 4px 10px rgba(0,0,0,.4); }
-    .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px;
-            box-shadow:0 6px 18px rgba(17,24,39,.06); padding:16px; margin-bottom:1.5rem; }
-    .table-like { border:1px solid #e5e7eb; border-radius:6px; overflow:hidden; }
-    .table-row { border-top:1px solid #e5e7eb; padding:12px 16px; font-size:.9rem; line-height:1.4rem; }
-    .table-row:first-child { border-top:0; }
-    .label-strong { font-weight:600; color:#111827; }
-    .subgrid { display:grid; grid-template-columns:1fr 1fr; gap:.5rem 1rem; }
-    @media(min-width:768px){
-      .subgrid { grid-template-columns:repeat(2,1fr); }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
-    pre.codebox { background:#0a1224; color:#cbd5e1; font-size:.8rem;
-                  padding:1rem; border-radius:.5rem; overflow-x:auto; }
-    .status-pill {
-      background:#1e3a8a; color:#fff; font-size:.7rem;
-      font-weight:600; line-height:1; padding:.25rem .5rem;
-      border-radius:.375rem;
+    
+    .card-glass {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    
+    .input-modern {
+      transition: all 0.3s ease;
+    }
+    
+    .input-modern:focus {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      transition: all 0.3s ease;
+    }
+    
+    .btn-secondary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(240, 147, 251, 0.4);
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .logo {
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .tab-button {
+      position: relative;
+      padding: 0.75rem 1.5rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      border-radius: 12px 12px 0 0;
+    }
+    
+    .tab-button.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .tab-button:not(.active) {
+      background: rgba(255, 255, 255, 0.5);
+      color: #4a5568;
+    }
+    
+    .tab-button:not(.active):hover {
+      background: rgba(255, 255, 255, 0.7);
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   </style>
 </head>
 
-<body class="bg-gray-50 min-h-screen flex flex-col">
-  <header class="topbar">
-    <div class="page-wrap flex items-center justify-between text-white text-sm">
-      <div class="font-bold text-lg">Rastreamento</div>
-      <div class="flex gap-2 items-center text-[0.75rem]">
-        <span id="conn-status" class="text-white/80 italic">conectando...</span>
-      </div>
+<body class="min-h-screen flex items-center justify-center p-4">
+  
+  <div class="w-full max-w-5xl animate-fade-in">
+    
+    <!-- Logo/Header -->
+    <div class="text-center mb-8">
+      <h1 class="logo mb-2">Mercosul Line</h1>
+      <p class="text-white text-sm font-medium">Sistema de Rastreamento de Cargas</p>
     </div>
-  </header>
-
-  <main class="page-wrap flex-grow w-full py-6">
-
-    <!-- Consulta Pública -->
-    <section class="card">
-      <h2 class="text-base font-semibold mb-2">Consulta de Carga</h2>
-      <p class="text-gray-600 text-sm mb-3">
-        Digite o número do Booking ou do Container para rastrear a sua carga.
-      </p>
-
-      <div class="flex flex-col md:flex-row gap-2 mb-4">
-        <input id="tracking-input"
-               type="text"
-               placeholder="Digite Booking ou Container (ex: P10482561)"
-               class="flex-1 border border-gray-300 rounded px-3 py-2 text-sm" />
-        <button id="tracking-button"
-                class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm font-semibold md:w-auto w-full">
-          Rastrear
+    
+    <!-- Card Principal -->
+    <div class="card-glass rounded-2xl shadow-2xl overflow-hidden">
+      
+      <!-- Tabs -->
+      <div class="flex border-b border-gray-200 bg-gray-50/50">
+        <button class="tab-button active" data-tab="rastreamento">
+          🔍 Rastreamento
+        </button>
+        <button class="tab-button" data-tab="ocorrencias">
+          📋 Registrar Ocorrência
+        </button>
+        <button class="tab-button" data-tab="login">
+          🔐 Acesso Restrito
         </button>
       </div>
-
-      <div id="tracking-results-public" class="space-y-3 text-sm" aria-live="polite">
-        <!-- resultados entram aqui -->
-      </div>
-    </section>
-
-    <!-- Registrar Evento / Status Operacional -->
-    <section class="card">
-      <button id="toggle-event-form"
-              class="w-full text-left text-sm font-semibold flex items-center gap-2">
-        <span>+ Registrar evento / status operacional</span>
-      </button>
-
-      <form id="event-form" class="hidden mt-4 space-y-3 text-sm">
-        <div class="grid md:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-gray-700 text-xs font-medium mb-1">
-              Embarcador
-            </label>
-            <input id="evt-embarcador" type="text" class="w-full border rounded px-2 py-2 text-sm"
-                   placeholder="AMAZONIA INDUSTRIA DE PLASTICOS LTDA" />
+      
+      <div class="p-8">
+        
+        <!-- TAB: Rastreamento -->
+        <div id="tab-rastreamento" class="tab-content active">
+          <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            Consulta de Carga
+          </h2>
+          <p class="text-gray-600 mb-6">
+            Digite o número do Booking ou Container para rastrear sua carga
+          </p>
+          
+          <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <input
+              id="tracking-input"
+              type="text"
+              placeholder="Digite Booking ou Container (ex: P10482561)"
+              class="input-modern flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+            >
+            <button
+              id="tracking-button"
+              class="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg"
+            >
+              Rastrear
+            </button>
           </div>
-          <div>
-            <label class="block text-gray-700 text-xs font-medium mb-1">
-              Booking
-            </label>
-            <input id="evt-booking" type="text" class="w-full border rounded px-2 py-2 text-sm"
-                   placeholder="P10482561" />
-          </div>
-          <div>
-            <label class="block text-gray-700 text-xs font-medium mb-1">
-              Status Operação
-            </label>
-            <input id="evt-status" type="text" class="w-full border rounded px-2 py-2 text-sm"
-                   placeholder="Programado / Em Execução / Concluído" />
-          </div>
-          <div>
-            <label class="block text-gray-700 text-xs font-medium mb-1">
-              Previsão Início
-            </label>
-            <input id="evt-previsao" type="datetime-local"
-                   class="w-full border rounded px-2 py-2 text-sm" />
-          </div>
-          <div>
-            <label class="block text-gray-700 text-xs font-medium mb-1">
-              Motorista
-            </label>
-            <input id="evt-motorista" type="text" class="w-full border rounded px-2 py-2 text-sm"
-                   placeholder="JONY MAFRA" />
-          </div>
-          <div>
-            <label class="block text-gray-700 text-xs font-medium mb-1">
-              Cavalo (placa veículo)
-            </label>
-            <input id="evt-cavalo" type="text" class="w-full border rounded px-2 py-2 text-sm"
-                   placeholder="MDL6I89" />
-          </div>
-          <div>
-            <label class="block text-gray-700 text-xs font-medium mb-1">
-              Reboque (carreta)
-            </label>
-            <input id="evt-reboque" type="text" class="w-full border rounded px-2 py-2 text-sm"
-                   placeholder="MAV4G79" />
+          
+          <!-- Resultados da consulta -->
+          <div id="tracking-results" class="space-y-3">
+            <p class="text-gray-500 text-sm text-center py-8">
+              Nenhuma consulta realizada ainda.
+            </p>
           </div>
         </div>
-
-        <button id="evt-submit"
-                type="button"
-                class="bg-blue-700 hover:bg-blue-800 text-white font-semibold px-4 py-2 rounded text-sm w-full md:w-auto">
-          Enviar Evento
-        </button>
-
-        <div id="evt-result" class="text-xs text-gray-600"></div>
-      </form>
-    </section>
-
-    <!-- Login (ainda Firebase Auth do front, aprovação manual depois) -->
-    <section class="card">
-      <h2 class="text-base font-semibold mb-2">Acesso Restrito</h2>
-      <p class="text-gray-600 text-sm mb-4">
-        Acesse para gerir os dados de rastreamento ou visualizar as suas operações.
-      </p>
-
-      <form id="login-form" class="space-y-3 text-sm">
-        <div>
-          <label for="email" class="block text-xs font-medium text-gray-700 mb-1">Email</label>
-          <input id="email" type="email"
-                 class="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-blue-50"
-                 required />
-        </div>
-        <div>
-          <label for="password" class="block text-xs font-medium text-gray-700 mb-1">Senha</label>
-          <input id="password" type="password"
-                 class="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                 required />
-        </div>
-        <button id="login-button" type="submit"
-                class="w-full bg-[#1f3fa4] hover:bg-[#1a3490] text-white font-semibold py-2 rounded text-sm">
-          Entrar
-        </button>
-      </form>
-
-      <div class="mt-3 text-right">
-        <a href="./register.html" class="text-[#1f3fa4] hover:underline text-xs">Solicitar acesso</a>
-      </div>
-    </section>
-
-    <!-- Diagnóstico -->
-    <section class="card">
-      <h2 class="text-base font-semibold mb-2">Diagnóstico</h2>
-      <p class="text-gray-600 text-xs mb-2">
-        Última resposta do backend / Supabase:
-      </p>
-      <pre id="diag-output" class="codebox text-[11px] leading-[1.4] whitespace-pre-wrap">{ ... }</pre>
-    </section>
-
-  </main>
-
-  <footer class="bg-gray-800 text-white text-center p-4 text-xs">
-    &copy; 2025 Rastreamento
-  </footer>
-
-  <script>
-    // Config Firebase client para login no futuro (mantemos como estava)
-    const __firebase_config = JSON.stringify({
-      apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
-      authDomain: "mercosul-teste.firebaseapp.com",
-      projectId: "mercosul-teste",
-      storageBucket: "mercosul-teste.appspot.com",
-      messagingSenderId: "650943607449",
-      appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
-      measurementId: "G-KJHFXFLJ6K"
-    });
-
-    // Base URL da API Express
-    // local: roda `npm run dev` no server -> http://localhost:8080
-    // prod:  URL gerada pelo Render, ex: https://mercosul-tracking.onrender.com
-    function getApiBaseUrl() {
-      const local = "http://localhost:8080";
-      const prod  = "https://SEU-BACKEND.onrender.com";
-      const host = window.location.hostname;
-      if (host === "localhost" || host === "127.0.0.1") return local;
-      return prod;
-    }
-
-    // Helpers simples de formatação de data
-    function formatDateTime(isoOrNull) {
-      if (!isoOrNull) return "N/A";
-      const d = new Date(isoOrNull);
-      if (isNaN(d.getTime())) return isoOrNull; // fallback bruto
-      const dd = String(d.getDate()).padStart(2,"0");
-      const mm = String(d.getMonth()+1).padStart(2,"0");
-      const yyyy = d.getFullYear();
-      const hh = String(d.getHours()).padStart(2,"0");
-      const min = String(d.getMinutes()).padStart(2,"0");
-      return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
-    }
-
-    // Renderiza lista pública (booking/container)
-    function renderPublicResults(list) {
-      const wrap = document.getElementById("tracking-results-public");
-      wrap.innerHTML = "";
-
-      if (!Array.isArray(list) || !list.length) {
-        wrap.innerHTML = '<p class="text-gray-500 text-sm">Nenhuma consulta ainda.</p>';
-        return;
-      }
-
-      list.forEach(op => {
-        const embarcadorNome = op.embarcadores?.nome_principal || "N/A";
-        const cavalo = op.placa_veiculo || "N/A";
-        const reboque = op.placa_carreta || "N/A";
-
-        const precoInicio = formatDateTime(op.previsao_inicio_atendimento);
-        const inicioExec  = formatDateTime(op.dt_inicio_execucao);
-        const fimExec     = formatDateTime(op.dt_fim_execucao);
-        const prevEntrega = formatDateTime(op.dt_previsao_entrega_recalculada);
-
-        const motorista   = op.nome_motorista || "N/A";
-        const cpfMotorista = op.cpf_motorista || "N/A";
-        const tipoProg    = op.tipo_programacao || "N/A";
-        const container   = op.containers || "N/A";
-
-        const row = document.createElement("div");
-        row.className = "table-like";
-
-        row.innerHTML = `
-          <div class="table-row grid gap-2 text-[.8rem] md:text-[.85rem] leading-5">
-            <div class="subgrid">
-              <div><span class="label-strong">Embarcador:</span> ${embarcadorNome}</div>
-              <div><span class="label-strong">Booking:</span> ${op.booking || "N/A"}</div>
-              <div><span class="label-strong">Container:</span> ${container}</div>
-              <div><span class="label-strong">Tipo Prog.:</span> ${tipoProg}</div>
-
-              <div><span class="label-strong">Previsão Início:</span> ${precoInicio}</div>
-              <div><span class="label-strong">Início Execução:</span> ${inicioExec}</div>
-
-              <div><span class="label-strong">Fim Execução:</span> ${fimExec}</div>
-              <div><span class="label-strong">Previsão Entrega:</span> ${prevEntrega}</div>
-
-              <div><span class="label-strong">Motorista:</span> ${motorista} (CPF: ${cpfMotorista})</div>
-              <div><span class="label-strong">Cavalo:</span> ${cavalo}</div>
-
-              <div><span class="label-strong">Reboque:</span> ${reboque}</div>
-              <div><span class="label-strong">Estado:</span>
-                <span class="status-pill">${op.status_operacao || "N/A"}</span>
+        
+        <!-- TAB: Ocorrências -->
+        <div id="tab-ocorrencias" class="tab-content">
+          <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            Registrar Ocorrência
+          </h2>
+          <p class="text-gray-600 mb-6">
+            Registre eventos e atualizações de status operacional
+          </p>
+          
+          <form id="ocorrencia-form" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                  Booking <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="ocorrencia-booking"
+                  placeholder="P10482561"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+              
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                  Container
+                </label>
+                <input
+                  type="text"
+                  id="ocorrencia-container"
+                  placeholder="TCLU1234567"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                >
               </div>
             </div>
+            
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">
+                Tipo de Ocorrência <span class="text-red-500">*</span>
+              </label>
+              <select
+                id="ocorrencia-tipo"
+                class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                required
+              >
+                <option value="">Selecione...</option>
+                <option value="inicio_operacao">Início de Operação</option>
+                <option value="fim_operacao">Fim de Operação</option>
+                <option value="atraso">Atraso</option>
+                <option value="problema_operacional">Problema Operacional</option>
+                <option value="observacao">Observação</option>
+              </select>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">
+                Descrição <span class="text-red-500">*</span>
+              </label>
+              <textarea
+                id="ocorrencia-descricao"
+                rows="4"
+                placeholder="Descreva a ocorrência..."
+                class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                required
+              ></textarea>
+            </div>
+            
+            <div id="ocorrencia-status" class="hidden">
+              <div class="p-4 rounded-xl"></div>
+            </div>
+            
+            <button
+              type="submit"
+              id="ocorrencia-button"
+              class="btn-secondary w-full text-white font-semibold py-4 rounded-xl shadow-lg"
+            >
+              Registrar Ocorrência
+            </button>
+          </form>
+        </div>
+        
+        <!-- TAB: Login -->
+        <div id="tab-login" class="tab-content">
+          <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            Acesso Restrito
+          </h2>
+          <p class="text-gray-600 mb-6">
+            Acesse para gerir os dados de rastreamento ou visualizar suas operações
+          </p>
+          
+          <form id="login-form" class="space-y-4">
+            <div>
+              <label for="login-email" class="block text-sm font-semibold text-gray-700 mb-2">
+                Email <span class="text-red-500">*</span>
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                placeholder="seu-email@exemplo.com"
+                class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                required
+              >
+            </div>
+            
+            <div>
+              <label for="login-password" class="block text-sm font-semibold text-gray-700 mb-2">
+                Senha <span class="text-red-500">*</span>
+              </label>
+              <div class="relative">
+                <input
+                  id="login-password"
+                  type="password"
+                  placeholder="Sua senha"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+            </div>
+            
+            <div id="login-status" class="hidden">
+              <div class="p-4 rounded-xl text-sm"></div>
+            </div>
+            
+            <button
+              type="submit"
+              id="login-button"
+              class="btn-primary w-full text-white font-semibold py-4 rounded-xl shadow-lg"
+            >
+              Entrar
+            </button>
+            
+            <div class="text-center pt-4">
+              <p class="text-gray-600 text-sm">
+                Não tem acesso ainda?
+                <a href="register.html" class="text-purple-600 hover:text-purple-700 font-semibold transition-colors">
+                  Solicitar Acesso
+                </a>
+              </p>
+            </div>
+          </form>
+          
+          <!-- Formulário de Registro (aparece após login sem cadastro) -->
+          <div id="register-section" class="hidden mt-8 pt-8 border-t border-gray-200">
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Solicitar Acesso</h3>
+            <p class="text-gray-600 mb-6">
+              Complete seu cadastro. Um administrador irá analisar e aprovar sua solicitação.
+            </p>
+            
+            <form id="register-form" class="space-y-4">
+              <div>
+                <label for="register-email" class="block text-sm font-semibold text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  id="register-email"
+                  type="email"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50"
+                  readonly
+                  required
+                >
+              </div>
+              
+              <div>
+                <label for="register-nome" class="block text-sm font-semibold text-gray-700 mb-2">
+                  Nome Completo <span class="text-red-500">*</span>
+                </label>
+                <input
+                  id="register-nome"
+                  type="text"
+                  placeholder="Seu nome completo"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+              
+              <div>
+                <label for="register-telefone" class="block text-sm font-semibold text-gray-700 mb-2">
+                  Telefone <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  id="register-telefone"
+                  placeholder="(11) 98765-4321"
+                  maxlength="15"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+              
+              <div>
+                <label for="register-cpf" class="block text-sm font-semibold text-gray-700 mb-2">
+                  CPF <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="register-cpf"
+                  placeholder="000.000.000-00"
+                  maxlength="14"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+              
+              <button
+                type="submit"
+                class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 rounded-xl shadow-lg transition-all"
+              >
+                Solicitar Acesso
+              </button>
+            </form>
           </div>
-        `;
-
-        wrap.appendChild(row);
-      });
-    }
-
-    // Chama /trackingList
-    async function buscarTracking() {
-      const inputEl = document.getElementById("tracking-input");
-      const ref = (inputEl.value || "").trim();
-      if (!ref) {
-        alert("Digite um Booking ou Container.");
-        return;
-      }
-
-      try {
-        const url = `${getApiBaseUrl()}/trackingList?booking=` + encodeURIComponent(ref);
-        const resp = await fetch(url);
-        const data = await resp.json();
-        if (!data.success) {
-          alert("Erro: " + (data.error || "Falha ao consultar"));
-          return;
-        }
-        renderPublicResults(data.data || []);
-      } catch (err) {
-        console.error("Erro no fetch trackingList:", err);
-        alert("Erro ao consultar tracking.");
-      }
-    }
-
-    // Faz ping no backend e mostra no diagnóstico
-    async function callTrackingPing() {
-      const diagEl = document.getElementById("diag-output");
-      const statusEl = document.getElementById("conn-status");
-
-      try {
-        const resp = await fetch(`${getApiBaseUrl()}/trackingPingSupabase`);
-        const data = await resp.json();
-        diagEl.textContent = JSON.stringify(data, null, 2);
-
-        if (data.success) {
-          statusEl.textContent = "online • banco ok";
-          statusEl.classList.remove("text-red-400");
-          statusEl.classList.add("text-green-300");
-        } else {
-          statusEl.textContent = "online • erro banco";
-          statusEl.classList.remove("text-green-300");
-          statusEl.classList.add("text-yellow-300");
-        }
-      } catch (err) {
-        console.error("Ping erro:", err);
-        diagEl.textContent = "Erro ao contatar backend.";
-        statusEl.textContent = "offline";
-        statusEl.classList.remove("text-green-300");
-        statusEl.classList.add("text-red-400");
-      }
-    }
-
-    // Envio de evento manual (POST /trackingEvent)
-    async function enviarEvento() {
-      const embarcador = document.getElementById("evt-embarcador").value.trim();
-      const booking = document.getElementById("evt-booking").value.trim();
-      const statusOp = document.getElementById("evt-status").value.trim();
-      const previsao = document.getElementById("evt-previsao").value.trim();
-      const motorista = document.getElementById("evt-motorista").value.trim();
-      const cavalo = document.getElementById("evt-cavalo").value.trim();
-      const reboque = document.getElementById("evt-reboque").value.trim();
-      const outEl = document.getElementById("evt-result");
-
-      if (!embarcador || !booking) {
-        outEl.textContent = "Preencha pelo menos Embarcador e Booking.";
-        return;
-      }
-
-      try {
-        const resp = await fetch(`${getApiBaseUrl()}/trackingEvent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            embarcador,
-            booking,
-            status_operacao: statusOp,
-            nome_motorista: motorista,
-            placa_veiculo: cavalo,
-            placa_carreta: reboque,
-            previsao_inicio_atendimento: previsao || null
-          })
-        });
-        const data = await resp.json();
-        outEl.textContent = data.success
-          ? "✅ Evento registrado com sucesso."
-          : "❌ Erro: " + (data.error || "Falha ao registrar");
-      } catch (err) {
-        console.error("Erro ao enviar evento:", err);
-        outEl.textContent = "❌ Falha na requisição.";
-      }
-    }
-
-    // Toggle do formulário de evento
-    function toggleEventoForm() {
-      const form = document.getElementById("event-form");
-      if (!form) return;
-      form.classList.toggle("hidden");
-    }
-
-    // Listeners
-    document.addEventListener("DOMContentLoaded", () => {
-      callTrackingPing();
-
-      document.getElementById("tracking-button")
-        ?.addEventListener("click", buscarTracking);
-
-      document.getElementById("toggle-event-form")
-        ?.addEventListener("click", toggleEventoForm);
-
-      document.getElementById("evt-submit")
-        ?.addEventListener("click", enviarEvento);
-
-      // (login Firebase Auth via CDN/portal/admin continua sendo feito nas outras páginas)
-    });
-  </script>
+        </div>
+        
+      </div>
+      
+      <!-- Diagnóstico (apenas visível para admins) -->
+      <div class="bg-gray-50 border-t border-gray-200 p-6">
+        <details class="cursor-pointer">
+          <summary class="text-sm font-semibold text-gray-700 mb-2">
+            🔧 Diagnóstico do Sistema
+          </summary>
+          <pre id="diag-output" class="bg-gray-900 text-green-400 text-xs rounded-xl p-4 mt-3 overflow-x-auto max-h-64">carregando...</pre>
+        </details>
+      </div>
+      
+    </div>
+    
+    <!-- Footer -->
+    <div class="text-center mt-6">
+      <p class="text-white text-xs opacity-75">
+        © 2025 Mercosul Line. Todos os direitos reservados.
+      </p>
+    </div>
+    
+  </div>
+  
+  <!-- Scripts -->
+  <script type="module" src="./js/config.js"></script>
+  <script type="module" src="./js/utilities.js"></script>
+  <script type="module" src="./js/script.js"></script>
+  
 </body>
 </html>

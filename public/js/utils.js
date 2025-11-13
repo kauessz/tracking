@@ -1,152 +1,265 @@
-/**
- * utils.js — parsing/format de datas + cálculo de atrasos
- * Saída padronizada: "dd/mm/aaaa hh:mm" (hora LOCAL, sem aplicar fuso indevido)
- */
+// public/js/utils.js
 
-const pad2 = (n) => String(n).padStart(2, "0");
+// -----------------------------
+// Helpers de data
+// -----------------------------
 
-/* ---------------------- Helpers de data ---------------------- */
-
-/**
- * Converte Excel Serial para Date **em horário local** (sem -3h).
- * Excel conta dias a partir de 1899-12-30. Aqui quebramos em parte inteira (dia)
- * e fração (horas/min/seg), e montamos Date local sem passar por UTC.
- */
-const excelSerialToDate = (val) => {
+function excelSerialToDate(val) {
   const serial = Number(val);
   if (!isFinite(serial)) return null;
-
-  const base = new Date(1899, 11, 30); // 1899-12-30 (LOCAL)
+  const base = new Date(1899, 11, 30);
   const wholeDays = Math.floor(serial);
   const frac = serial - wholeDays;
 
-  // Avança dia local
-  const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
-  d.setDate(d.getDate() + wholeDays);
+  const d = new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate() + wholeDays,
+    0, 0, 0, 0
+  );
 
-  // Converte fração do dia em h:m:s (arredondado a segundos)
-  const totalSecs = Math.round(frac * 86400);
-  const hh = Math.floor(totalSecs / 3600);
-  const mm = Math.floor((totalSecs % 3600) / 60);
-  const ss = totalSecs % 60;
+  const totalSeconds = Math.round(frac * 24 * 60 * 60);
+  d.setSeconds(totalSeconds);
+  return d;
+}
 
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, ss, 0);
-};
-
-// dd/mm/aaaa [hh:mm]
-const parseBrazil = (txt) => {
-  const m = String(txt).trim().match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:[,\s]+(\d{1,2}):(\d{2}))?$/
+function parseBrDateTime(str) {
+  if (typeof str !== "string") return null;
+  const m = str.trim().match(
+    /^(\d{2})[\/\-](\d{2})[\/\-](\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/
   );
   if (!m) return null;
-  let [, dd, mm, yyyy, hh, mi] = m;
-  dd = parseInt(dd, 10);
-  mm = parseInt(mm, 10) - 1;
-  yyyy = parseInt(yyyy, 10);
-  if (yyyy < 100) yyyy += 2000;
-  hh = hh ? parseInt(hh, 10) : 0;
-  mi = mi ? parseInt(mi, 10) : 0;
-  const d = new Date(yyyy, mm, dd, hh, mi);
-  return isNaN(d) ? null : d;
-};
+  const [, dd, mm, yyyy, hh = "00", min = "00", ss = "00"] = m;
+  const d = new Date(
+    Number(yyyy), Number(mm) - 1, Number(dd),
+    Number(hh), Number(min), Number(ss), 0
+  );
+  return isNaN(d.getTime()) ? null : d;
+}
 
-/* ---------------------- API Pública ---------------------- */
+export function parseDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
 
-/** Formata Date para "dd/mm/aaaa hh:mm" (LOCAL) */
-export const formatDate = (dateObject) => {
-  if (!(dateObject instanceof Date) || isNaN(dateObject)) return null;
-  const dd = pad2(dateObject.getDate());
-  const mm = pad2(dateObject.getMonth() + 1);
-  const yyyy = dateObject.getFullYear();
-  const hh = pad2(dateObject.getHours());
-  const mi = pad2(dateObject.getMinutes());
+  if (typeof v === "number") {
+    const d = excelSerialToDate(v);
+    if (d) return d;
+  }
+
+  if (typeof v === "string") {
+    const tryBr = parseBrDateTime(v);
+    if (tryBr) return tryBr;
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+export function formatDateForDisplay(dateLike) {
+  const d = parseDate(dateLike);
+  if (!d) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
   return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
-};
+}
 
-/**
- * Analisa vários formatos: Excel serial (number/string), "dd/mm/aaaa hh:mm",
- * e fallback de Date (cautela). Tudo interpretado como **horário local**.
- */
-export const parseDate = (value) => {
-  if (value === null || value === undefined || value === "") return null;
+// Usa tanto chaves do front (DataProgramada/DataChegada) quanto do backend
+export function calculateDelayInMinutes(op = {}) {
+  const sched = parseDate(
+    op.DataProgramada ??
+    op.previsao_inicio_atendimento
+  );
+  if (!sched) return 0;
 
-  // número (Excel) ou string numérica (Excel)
-  if (typeof value === "number") return excelSerialToDate(value);
-  const trimmed = String(value).trim();
-  if (/^\d+(\.\d+)?$/.test(trimmed)) return excelSerialToDate(trimmed);
+  const actual = parseDate(
+    op.DataChegada ??
+    op.dt_inicio_execucao
+  ) || new Date();
 
-  // BR
-  const br = parseBrazil(trimmed);
-  if (br) return br;
+  const diffMs = actual.getTime() - sched.getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  return diffMin > 0 ? diffMin : 0;
+}
 
-  // Fallback genérico
-  const d = new Date(trimmed);
-  return isNaN(d) ? null : d;
-};
+export function formatMinutesToHHMM(mins) {
+  const total = Math.max(0, Number(mins) || 0);
+  const hh = String(Math.floor(total / 60)).padStart(2, "0");
+  const mm = String(total % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
 
-/**
- * Calcula o atraso em minutos, com ajuste -1h para Manaus:
- * - COLETA + POL=Manaus, ou
- * - ENTREGA + POD=Manaus
- * Mantém fallback: se CidadeDescarga contiver "manaus", também aplica -1h.
- */
-export const calculateDelayInMinutes = (operation) => {
-  const previsaoDate = parseDate(operation?.DataProgramada);
-  if (!previsaoDate) return null;
-
-  let execucaoDate = parseDate(operation?.DataChegada);
-
-  // Se falta execução e a previsão já passou, usa "agora"
-  if (!execucaoDate && previsaoDate < new Date()) execucaoDate = new Date();
-  if (!execucaoDate) return null;
-
-  let adjusted = new Date(execucaoDate.getTime());
-
-  const tipo = (operation?.TipoProgramacao || "").toString().toLowerCase();
-  const pol  = (operation?.POL || "").toString().toLowerCase();
-  const pod  = (operation?.POD || "").toString().toLowerCase();
-  const isManaus = (s) => s.includes("manaus");
-
-  if ((tipo.includes("coleta")  && isManaus(pol)) ||
-      (tipo.includes("entrega") && isManaus(pod)) ||
-      ((operation?.CidadeDescarga || "").toString().toLowerCase().includes("manaus"))) {
-    adjusted = new Date(adjusted.getTime() - 60 * 60 * 1000);
-  }
-
-  return Math.round((adjusted.getTime() - previsaoDate.getTime()) / 60000);
-};
-
-/** Formata valor de data aceito por parseDate para exibição. */
-export const formatDateForDisplay = (value) => {
-  const d = parseDate(value);
-  if (!d) return "N/A";
-  return formatDate(d);
-};
-
-/** Converte minutos em "HH:MM" ou "ON TIME" (<=0). */
-export const formatMinutesToHHMM = (totalMinutes) => {
-  if (totalMinutes === null || isNaN(totalMinutes) || totalMinutes <= 0) {
-    return "ON TIME";
-  }
-  const h = Math.floor(totalMinutes / 60);
-  const m = Math.round(totalMinutes % 60);
-  return `${pad2(h)}:${pad2(m)}`;
-};
-
-/* ---------------------- PWA helper ---------------------- */
-export const registerPWA = () => {
+// -----------------------------
+// PWA
+// -----------------------------
+export function registerPWA() {
   try {
-    // injeta manifest se não estiver no HTML
     if (!document.querySelector('link[rel="manifest"]')) {
-      const link = document.createElement('link');
-      link.rel = 'manifest';
-      link.href = '/manifest.webmanifest';
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = "./manifest.webmanifest";
       document.head.appendChild(link);
     }
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch((e)=>console.warn('SW fail:', e));
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./service-worker.js").catch((err) => {
+        console.warn("SW registration failed:", err);
+      });
     }
-  } catch (e) {
-    console.warn('PWA register skipped:', e);
+  } catch (err) {
+    console.warn("registerPWA error:", err);
   }
-};
+}
+
+// -----------------------------
+// Corpo de e-mail (texto)
+// -----------------------------
+export function buildAlertEmailBody(ops, clienteNome = "Cliente") {
+  const atrasadas = Array.isArray(ops)
+    ? ops.filter((o) => (calculateDelayInMinutes(o) || 0) > 0)
+    : [];
+
+  if (!atrasadas.length) {
+    return {
+      subject: `Status das operações - ${clienteNome}`,
+      body: `Prezados(as),\n\nNo momento não identificamos operações com atraso.\n\nAgradecemos a compreensão.\n\nAtenciosamente,\nCustomer Service / Mercosul Line`
+    };
+  }
+
+  let bodyLines = [];
+  bodyLines.push("Prezados(as),", "", 
+    "Gostaríamos de informar que identificamos um atraso nas operações listadas abaixo.", "",
+    "Pedimos desculpas pelo ocorrido. Nossa equipe já está atuando para mitigar qualquer impacto operacional e trabalhando ativamente para confirmar uma nova previsão de chegada.", "",
+    "Assim que tivermos essa confirmação, entraremos em contato imediatamente.", "",
+    "=".repeat(80), "");
+
+  atrasadas.forEach((op, idx) => {
+    const atrasoMin = calculateDelayInMinutes(op) || 0;
+    const container = op.Container || op.containers || op.container || "—";
+    const motivo = op.JustificativaAtraso || op.motivo_atraso || "Não informado";
+    const embarcador = op.Cliente || op.embarcador_nome || clienteNome;
+    const porto = op.PortoOperacao || op.porto_operacao || "—";
+    const tipo = op.TipoOperacao || op.TipoProgramacao || op.tipo_programacao || "—";
+    const prev = op.DataProgramada ?? op.previsao_inicio_atendimento;
+
+    bodyLines.push(`${idx + 1}. OPERAÇÃO`);
+    bodyLines.push(`   Booking: ${op.Booking || op.booking || "—"}`);
+    bodyLines.push(`   Container: ${container}`);
+    bodyLines.push(`   Embarcador: ${embarcador}`);
+    bodyLines.push(`   Porto: ${porto}`);
+    bodyLines.push(`   Tipo Programação: ${tipo}`);
+    bodyLines.push(`   Previsão Início: ${formatDateForDisplay(prev)}`);
+    bodyLines.push(`   Atraso: ${formatMinutesToHHMM(atrasoMin)}`);
+    bodyLines.push(`   Motivo: ${motivo}`, "");
+  });
+
+  bodyLines.push("=".repeat(80), "", "Agradecemos a compreensão.", "", "Atenciosamente,", "Customer Service / Mercosul Line");
+
+  return { subject: `⚠ Alerta de Atraso - ${clienteNome}`, body: bodyLines.join("\n") };
+}
+
+// -----------------------------
+// Criação de arquivo EML (HTML + Texto)
+// -----------------------------
+export function createEMLFile(
+  ops,
+  clienteNome = "Cliente",
+  fromEmail = "operacao@mercosulline.com.br",
+  toEmail = "cliente@email.com"
+) {
+  const atrasadas = Array.isArray(ops)
+    ? ops.filter((o) => (calculateDelayInMinutes(o) || 0) > 0)
+    : [];
+  if (!atrasadas.length) return null;
+
+  const subject = `Alerta de Atraso - ${clienteNome}`;
+  const boundary = "----=_Part_" + Date.now();
+  const now = new Date().toUTCString();
+
+  let htmlBody = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  body { font-family: Arial, sans-serif; line-height:1.6; color:#333; max-width:800px; margin:0 auto; padding:20px;}
+  .intro{background:#fff3cd; border-left:4px solid #ffc107; padding:15px; margin:20px 0;}
+  table{border-collapse:collapse; width:100%; margin:20px 0; box-shadow:0 2px 4px rgba(0,0,0,.1);}
+  th{background:#0b2263; color:#fff; padding:12px 8px; text-align:left; font-size:13px; font-weight:600;}
+  td{border:1px solid #ddd; padding:10px 8px; font-size:13px;}
+  tr:nth-child(even){background:#f8f9fa;}
+  .atraso-cell{color:#c53030; font-weight:bold;}
+</style>
+</head><body>
+<div class="intro">
+  <p><strong>Gostaríamos de informar que identificamos um atraso nas operações listadas abaixo.</strong></p>
+  <p>Pedimos desculpas pelo ocorrido. Nossa equipe já está atuando para mitigar qualquer impacto operacional e trabalhando ativamente para confirmar uma nova previsão de chegada.</p>
+  <p>Assim que tivermos essa confirmação, entraremos em contato imediatamente.</p>
+</div>
+<table><thead><tr>
+  <th>Booking</th><th>Container</th><th>Embarcador</th><th>Porto</th>
+  <th>Tipo Prog.</th><th>Previsão Início</th><th>Atraso</th><th>Motivo</th>
+</tr></thead><tbody>`;
+
+  atrasadas.forEach((op) => {
+    const atrasoMin = calculateDelayInMinutes(op) || 0;
+    const container = op.Container || op.containers || op.container || "—"; // <-- SINGULAR
+    const motivo = op.JustificativaAtraso || op.motivo_atraso || "Não informado";
+    const embarcador = op.Cliente || op.embarcador_nome || clienteNome;
+    const porto = op.PortoOperacao || op.porto_operacao || "—";
+    const tipo = op.TipoOperacao || op.TipoProgramacao || op.tipo_programacao || "—";
+    const prev = op.DataProgramada ?? op.previsao_inicio_atendimento;
+
+    htmlBody += `
+<tr>
+  <td>${op.Booking || op.booking || "—"}</td>
+  <td>${container}</td>
+  <td>${embarcador}</td>
+  <td>${porto}</td>
+  <td>${tipo}</td>
+  <td>${formatDateForDisplay(prev)}</td>
+  <td class="atraso-cell">${formatMinutesToHHMM(atrasoMin)}</td>
+  <td>${motivo}</td>
+</tr>`;
+  });
+
+  htmlBody += `</tbody></table>
+<p>Agradecemos a compreensão.</p>
+<p><strong>Atenciosamente,</strong><br/>Customer Service / Mercosul Line</p>
+</body></html>`;
+
+  const textBody = buildAlertEmailBody(atrasadas, clienteNome).body;
+
+  const emlContent = `From: ${fromEmail}
+To: ${toEmail}
+Subject: ${subject}
+Date: ${now}
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="${boundary}"
+
+--${boundary}
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+${textBody}
+
+--${boundary}
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+${htmlBody}
+
+--${boundary}--
+`;
+  return emlContent;
+}
+
+export function downloadEML(emlContent, filename = "alerta-atrasos.eml") {
+  const blob = new Blob([emlContent], { type: "message/rfc822" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

@@ -1,21 +1,20 @@
 // server/supabaseClient.js
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+require("dotenv").config();
+const { createClient } = require("@supabase/supabase-js");
 
-// Estas variáveis vêm do ambiente do Render (.env do serviço)
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const url = process.env.SUPABASE_URL;
+const serviceKey = process.env.SUPABASE_SERVICE_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn('⚠️  SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY ausentes. Verifique suas variáveis de ambiente.');
+if (!url || !serviceKey) {
+  console.warn("⚠️  SUPABASE_URL ou SUPABASE_SERVICE_KEY ausentes. Verifique suas variáveis de ambiente.");
 }
 
-// Client com a service role key (backend ONLY, nunca expor no front)
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+// client com service role -> acesso total (somente servidor)
+const supabase = createClient(url, serviceKey, {
   auth: {
     autoRefreshToken: false,
-    persistSession: false,
-  },
+    persistSession: false
+  }
 });
 
 module.exports = { supabase };

@@ -1,0 +1,53 @@
+{
+  "name": "rastreamento-mercosul-line",
+  "version": "2.0.0",
+  "description": "Sistema de Rastreamento de Operações - Mercosul Line",
+  "main": "server/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint . --ext .js",
+    "format": "prettier --write \"**/*.{js,json,md}\"",
+    "serve:front": "npx http-server public -p 5500",
+    "build": "echo 'No build step required'"
+  },
+  "keywords": [
+    "rastreamento",
+    "logistica",
+    "tracking",
+    "mercosul-line"
+  ],
+  "author": "Kauê Lima",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "firebase-admin": "^12.0.0",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.23.0",
+    "eslint": "^8.54.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "prettier": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kauessz/rastreamento.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kauessz/rastreamento/issues"
+  },
+  "homepage": "https://github.com/kauessz/rastreamento#readme"
+}

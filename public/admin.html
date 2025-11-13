@@ -1,211 +1,412 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Painel Administrativo - Mercosul Line</title>
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rastreamento | Mercosul Line</title>
+  
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
-  <link rel="stylesheet" href="./css/style.css"/>
-
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
   <style>
-    body{font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-    /* ↑ aumentamos a largura útil */
-    .page-wrap{max-width:96rem}
-    .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 6px 18px rgba(17,24,39,.06);padding:16px}
-    .table th{font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;color:#6b7280}
-    .table td{font-size:.9rem;color:#111827}
-    .table tr:hover{background:#f9fafb}
-    .header-brand{background:#0b2263}
-    .kpi{border-radius:12px;padding:16px;color:#fff;display:flex;flex-direction:column;gap:.25rem;box-shadow:0 6px 18px rgba(17,24,39,.10)}
-    .kpi h3{font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;opacity:.9}
-    .kpi p{font-size:2rem;font-weight:800;line-height:1}
-    .kpi-blue{background:#1e3a8a}
-    .kpi-green{background:#166534}
-    .kpi-red{background:#7f1d1d}
-    .kpi-orange{background:#92400e}
-
-    /* -------- alinhamento consistente da tabela -------- */
-    .table{table-layout:fixed;width:100%}
-    .table th,.table td{
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
-    .col-booking{  width:9rem;  }   /* ~144px */
-    .col-shipper{  width:18rem; }   /* ~288px */
-    .col-porto{    width:10rem; }   /* ~160px */
-    .col-previsao{ width:12rem; }   /* ~192px */
-    .col-exec{     width:12rem; }   /* ~192px */
-    .col-atraso{   width:7rem;  }   /* ~112px */
+    
+    .card-glass {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+    
+    .input-modern {
+      transition: all 0.3s ease;
+    }
+    
+    .input-modern:focus {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      transition: all 0.3s ease;
+    }
+    
+    .btn-secondary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(240, 147, 251, 0.4);
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .logo {
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .tab-button {
+      position: relative;
+      padding: 0.75rem 1.5rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      border-radius: 12px 12px 0 0;
+    }
+    
+    .tab-button.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .tab-button:not(.active) {
+      background: rgba(255, 255, 255, 0.5);
+      color: #4a5568;
+    }
+    
+    .tab-button:not(.active):hover {
+      background: rgba(255, 255, 255, 0.7);
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
   </style>
 </head>
-<body class="bg-white min-h-screen text-gray-900">
-  <header class="header-brand text-white px-6 py-4 shadow">
-    <div class="page-wrap mx-auto flex items-center justify-between">
-      <h1 class="font-bold text-xl">Painel Administrativo</h1>
-      <a id="logout-button" href="#" class="text-white/90 hover:text-white">Sair</a>
+
+<body class="min-h-screen flex items-center justify-center p-4">
+  
+  <div class="w-full max-w-5xl animate-fade-in">
+    
+    <!-- Logo/Header -->
+    <div class="text-center mb-8">
+      <h1 class="logo mb-2">Mercosul Line</h1>
+      <p class="text-white text-sm font-medium">Sistema de Rastreamento de Cargas</p>
     </div>
-  </header>
-
-  <main class="px-5 sm:px-7 py-7">
-    <div class="page-wrap mx-auto space-y-9" id="main-view">
-
-      <!-- Aprovação de usuários -->
-      <section id="user-management-section" class="card hidden">
-        <h2 class="text-lg font-semibold mb-4">Aprovação de Novos Utilizadores</h2>
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200 table">
-            <thead>
-              <tr>
-                <th class="px-6 py-3 text-left">Email</th>
-                <th class="px-6 py-3 text-left">Associar a Embarcador / Função</th>
-                <th class="px-6 py-3 text-left">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="pending-users-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Upload / Limpar -->
-      <section id="admin-section" class="card">
-        <h2 class="text-lg font-semibold">Upload de Dados de Rastreamento</h2>
-        <p class="text-sm text-gray-600 mb-4">Selecione um Excel (.xlsx, .xls) para sincronizar.</p>
-        <input id="upload-file" type="file" accept=".xlsx,.xls"/>
-        <div id="upload-status" class="text-sm mt-2 text-gray-600"></div>
-
-        <hr class="my-6">
-
-        <h3 class="text-base font-semibold mb-2">Gestão de Dados</h3>
-        <p class="text-sm text-gray-600 mb-3">Use para limpar todas as programações existentes (irreversível).</p>
-        <!-- ID corrigido para bater com admin.js -->
-        <button id="clear-data-btn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded">
-          Limpar Dados
+    
+    <!-- Card Principal -->
+    <div class="card-glass rounded-2xl shadow-2xl overflow-hidden">
+      
+      <!-- Tabs -->
+      <div class="flex border-b border-gray-200 bg-gray-50/50">
+        <button class="tab-button active" data-tab="rastreamento">
+          🔍 Rastreamento
         </button>
-      </section>
-
-      <!-- Filtros, KPIs e Tabelas -->
-      <section id="data-management-section" class="card">
-        <h2 class="text-lg font-semibold mb-2">Gestão de Dados</h2>
-        <p class="text-sm text-gray-600 mb-4">Filtre para analisar operações, atrasos e motivos (sem transportadora).</p>
-
-        <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
-          <div class="md:col-span-2">
-            <label class="block text-sm font-medium mb-1" for="filter-embarcador">Embarcador</label>
-            <select id="filter-embarcador" multiple></select>
+        <button class="tab-button" data-tab="ocorrencias">
+          📋 Registrar Ocorrência
+        </button>
+        <button class="tab-button" data-tab="login">
+          🔐 Acesso Restrito
+        </button>
+      </div>
+      
+      <div class="p-8">
+        
+        <!-- TAB: Rastreamento -->
+        <div id="tab-rastreamento" class="tab-content active">
+          <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            Consulta de Carga
+          </h2>
+          <p class="text-gray-600 mb-6">
+            Digite o número do Booking ou Container para rastrear sua carga
+          </p>
+          
+          <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <input
+              id="tracking-input"
+              type="text"
+              placeholder="Digite Booking ou Container (ex: P10482561)"
+              class="input-modern flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+            >
+            <button
+              id="tracking-button"
+              class="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg"
+            >
+              Rastrear
+            </button>
           </div>
-          <div>
-            <label class="block text-sm font-medium mb-1" for="filter-booking">Booking</label>
-            <input id="filter-booking" type="text" placeholder="Buscar por Booking/Container/Porto" class="w-full border rounded px-3 py-2">
+          
+          <!-- Resultados da consulta -->
+          <div id="tracking-results" class="space-y-3">
+            <p class="text-gray-500 text-sm text-center py-8">
+              Nenhuma consulta realizada ainda.
+            </p>
           </div>
-          <div>
-            <label class="block text-sm font-medium mb-1" for="filter-date">Data Programada</label>
-            <input id="filter-date" type="date" class="w-full border rounded px-3 py-2">
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-1 invisible">.</label>
-            <button id="clear-filters" class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">Limpar filtros</button>
-          </div>
-          <div>
-            <label class="block text-sm font-medium mb-1 invisible">.</label>
-            <button id="export-excel" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Exportar Excel</button>
-          </div>
-
-          <div class="md:col-span-2 flex flex-col gap-2">
-            <label class="block text-sm font-medium mb-1">Ações</label>
-            <div class="flex flex-col sm:flex-row gap-2">
-              <button id="send-email-btn" class="flex-1 bg-blue-700 hover:bg-blue-800 text-white font-semibold px-4 py-2 rounded">
-                Enviar e-mail ao cliente (sem API integrada)
-              </button>
-              <button id="compose-email-btn" class="flex-1 bg-blue-600/90 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded">
-                Criar e-mail
-              </button>
+        </div>
+        
+        <!-- TAB: Ocorrências -->
+        <div id="tab-ocorrencias" class="tab-content">
+          <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            Registrar Ocorrência
+          </h2>
+          <p class="text-gray-600 mb-6">
+            Registre eventos e atualizações de status operacional
+          </p>
+          
+          <form id="ocorrencia-form" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                  Booking <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="ocorrencia-booking"
+                  placeholder="P10482561"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+              
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                  Container
+                </label>
+                <input
+                  type="text"
+                  id="ocorrencia-container"
+                  placeholder="TCLU1234567"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                >
+              </div>
             </div>
+            
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">
+                Tipo de Ocorrência <span class="text-red-500">*</span>
+              </label>
+              <select
+                id="ocorrencia-tipo"
+                class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                required
+              >
+                <option value="">Selecione...</option>
+                <option value="inicio_operacao">Início de Operação</option>
+                <option value="fim_operacao">Fim de Operação</option>
+                <option value="atraso">Atraso</option>
+                <option value="problema_operacional">Problema Operacional</option>
+                <option value="observacao">Observação</option>
+              </select>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">
+                Descrição <span class="text-red-500">*</span>
+              </label>
+              <textarea
+                id="ocorrencia-descricao"
+                rows="4"
+                placeholder="Descreva a ocorrência..."
+                class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                required
+              ></textarea>
+            </div>
+            
+            <div id="ocorrencia-status" class="hidden">
+              <div class="p-4 rounded-xl"></div>
+            </div>
+            
+            <button
+              type="submit"
+              id="ocorrencia-button"
+              class="btn-secondary w-full text-white font-semibold py-4 rounded-xl shadow-lg"
+            >
+              Registrar Ocorrência
+            </button>
+          </form>
+        </div>
+        
+        <!-- TAB: Login -->
+        <div id="tab-login" class="tab-content">
+          <h2 class="text-3xl font-bold text-gray-900 mb-2">
+            Acesso Restrito
+          </h2>
+          <p class="text-gray-600 mb-6">
+            Acesse para gerir os dados de rastreamento ou visualizar suas operações
+          </p>
+          
+          <form id="login-form" class="space-y-4">
+            <div>
+              <label for="login-email" class="block text-sm font-semibold text-gray-700 mb-2">
+                Email <span class="text-red-500">*</span>
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                placeholder="seu-email@exemplo.com"
+                class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                required
+              >
+            </div>
+            
+            <div>
+              <label for="login-password" class="block text-sm font-semibold text-gray-700 mb-2">
+                Senha <span class="text-red-500">*</span>
+              </label>
+              <div class="relative">
+                <input
+                  id="login-password"
+                  type="password"
+                  placeholder="Sua senha"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+            </div>
+            
+            <div id="login-status" class="hidden">
+              <div class="p-4 rounded-xl text-sm"></div>
+            </div>
+            
+            <button
+              type="submit"
+              id="login-button"
+              class="btn-primary w-full text-white font-semibold py-4 rounded-xl shadow-lg"
+            >
+              Entrar
+            </button>
+            
+            <div class="text-center pt-4">
+              <p class="text-gray-600 text-sm">
+                Não tem acesso ainda?
+                <a href="register.html" class="text-purple-600 hover:text-purple-700 font-semibold transition-colors">
+                  Solicitar Acesso
+                </a>
+              </p>
+            </div>
+          </form>
+          
+          <!-- Formulário de Registro (aparece após login sem cadastro) -->
+          <div id="register-section" class="hidden mt-8 pt-8 border-t border-gray-200">
+            <h3 class="text-2xl font-bold text-gray-900 mb-2">Solicitar Acesso</h3>
+            <p class="text-gray-600 mb-6">
+              Complete seu cadastro. Um administrador irá analisar e aprovar sua solicitação.
+            </p>
+            
+            <form id="register-form" class="space-y-4">
+              <div>
+                <label for="register-email" class="block text-sm font-semibold text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  id="register-email"
+                  type="email"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50"
+                  readonly
+                  required
+                >
+              </div>
+              
+              <div>
+                <label for="register-nome" class="block text-sm font-semibold text-gray-700 mb-2">
+                  Nome Completo <span class="text-red-500">*</span>
+                </label>
+                <input
+                  id="register-nome"
+                  type="text"
+                  placeholder="Seu nome completo"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+              
+              <div>
+                <label for="register-telefone" class="block text-sm font-semibold text-gray-700 mb-2">
+                  Telefone <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  id="register-telefone"
+                  placeholder="(11) 98765-4321"
+                  maxlength="15"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+              
+              <div>
+                <label for="register-cpf" class="block text-sm font-semibold text-gray-700 mb-2">
+                  CPF <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="register-cpf"
+                  placeholder="000.000.000-00"
+                  maxlength="14"
+                  class="input-modern w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                  required
+                >
+              </div>
+              
+              <button
+                type="submit"
+                class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 rounded-xl shadow-lg transition-all"
+              >
+                Solicitar Acesso
+              </button>
+            </form>
           </div>
         </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div id="total-ops-card" class="kpi kpi-blue cursor-pointer"><h3>Total de Operações</h3><p id="total-ops">0</p></div>
-          <div id="on-time-ops-card" class="kpi kpi-green cursor-pointer"><h3>Operações On Time</h3><p id="on-time-ops">0</p></div>
-          <div id="delayed-ops-card" class="kpi kpi-red cursor-pointer"><h3>Operações com Atraso</h3><p id="delayed-ops">0</p></div>
-          <div class="kpi kpi-orange"><h3>Percentual de Atraso</h3><p id="delayed-ops-pct">0%</p></div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div class="card">
-            <h3 class="text-lg font-semibold mb-2">Maiores Ofensores (Processos com Atraso)</h3>
-            <div class="h-80"><canvas id="delay-chart"></canvas></div>
-          </div>
-          <div class="card">
-            <h3 class="text-lg font-semibold mb-2">Top Motivos de Atraso</h3>
-            <div class="h-80"><canvas id="reasons-chart"></canvas></div>
-          </div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200 table">
-            <thead id="results-table-head" class="bg-white">
-              <tr>
-                <th data-sort="Booking"         class="px-6 py-3 text-left sortable-header col-booking">Booking <span class="sort-indicator"></span></th>
-                <th data-sort="Cliente"         class="px-6 py-3 text-left sortable-header col-shipper">Embarcador <span class="sort-indicator"></span></th>
-                <th data-sort="PortoOperacao"   class="px-6 py-3 text-left sortable-header col-porto">Porto <span class="sort-indicator"></span></th>
-                <th data-sort="DataProgramada"  class="px-6 py-3 text-left sortable-header col-previsao">Previsão Início <span class="sort-indicator"></span></th>
-                <th data-sort="DataChegada"     class="px-6 py-3 text-left sortable-header col-exec">Início Execução <span class="sort-indicator"></span></th>
-                <th                              class="px-6 py-3 text-center col-atraso">Atraso</th>
-                <th                              class="px-6 py-3 text-left">Motivo do Atraso</th>
-              </tr>
-            </thead>
-            <tbody id="results-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-          </table>
-        </div>
-      </section>
+        
+      </div>
+      
+      <!-- Diagnóstico (apenas visível para admins) -->
+      <div class="bg-gray-50 border-t border-gray-200 p-6">
+        <details class="cursor-pointer">
+          <summary class="text-sm font-semibold text-gray-700 mb-2">
+            🔧 Diagnóstico do Sistema
+          </summary>
+          <pre id="diag-output" class="bg-gray-900 text-green-400 text-xs rounded-xl p-4 mt-3 overflow-x-auto max-h-64">carregando...</pre>
+        </details>
+      </div>
+      
     </div>
-
-    <!-- Detalhes -->
-    <section id="details-view" class="page-wrap mx-auto card hidden mt-6">
-      <div class="flex items-center justify-between mb-4">
-        <h2 id="details-title" class="text-lg font-semibold">Detalhes</h2>
-        <button id="details-back-btn" type="button" class="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded">
-          &larr; Voltar ao Painel
-        </button>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 table">
-          <thead class="bg-white">
-            <tr>
-              <th class="px-6 py-3 text-left">Booking</th>
-              <th class="px-6 py-3 text-left">Embarcador</th>
-              <th class="px-6 py-3 text-left">Porto</th>
-              <th class="px-6 py-3 text-left">Previsão Início</th>
-              <th class="px-6 py-3 text-left">Início Execução</th>
-              <th class="px-6 py-3 text-left">Atraso</th>
-              <th class="px-6 py-3 text-left">Motivo</th>
-            </tr>
-          </thead>
-          <tbody id="details-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
-
-  <!-- XLSX UMD opcional; admin.js carrega dinamicamente se faltar -->
-  <script id="xlsx-lib" src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
-
-  <script>
-    const __firebase_config = JSON.stringify({
-      apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
-      authDomain: "mercosul-teste.firebaseapp.com",
-      projectId: "mercosul-teste",
-      storageBucket: "mercosul-teste.appspot.com",
-      messagingSenderId: "650943607449",
-      appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
-      measurementId: "G-KJHFXFLJ6K"
-    });
-  </script>
-
-  <script type="module" src="./js/admin.js"></script>
+    
+    <!-- Footer -->
+    <div class="text-center mt-6">
+      <p class="text-white text-xs opacity-75">
+        © 2025 Mercosul Line. Todos os direitos reservados.
+      </p>
+    </div>
+    
+  </div>
+  
+  <!-- Scripts -->
+  <script type="module" src="./js/config.js"></script>
+  <script type="module" src="./js/utilities.js"></script>
+  <script type="module" src="./js/script.js"></script>
+  
 </body>
 </html>

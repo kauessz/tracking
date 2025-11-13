@@ -3,129 +3,205 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Portal do Cliente</title>
+  <title>Portal do Cliente | Mercosul Line</title>
+
+  <meta name="theme-color" content="#667eea">
+  
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  
   <style>
-    /* Seta do FAQ */
-    details > summary { list-style: none; cursor: pointer; }
-    details > summary::-webkit-details-marker { display: none; }
-    details > summary::before { content: '+'; padding-right: .5rem; font-weight: bold; }
-    details[open] > summary::before { content: '-'; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    
+    .glass-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 20px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+    }
+    
+    .page-wrap {
+      max-width: 96rem;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+    
+    .kpi {
+      border-radius: 16px;
+      padding: 20px;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .kpi:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+    }
+    
+    .kpi h3 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      opacity: 0.9;
+    }
+    
+    .kpi p {
+      font-size: 2.5rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    
+    .kpi-gradient-1 {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .kpi-gradient-2 {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+    
+    .kpi-gradient-3 {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    
+    .kpi-gradient-4 {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+    
+    .btn-modern {
+      transition: all 0.3s ease;
+    }
+    
+    .btn-modern:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+    
+    .input-modern {
+      transition: all 0.3s ease;
+      border-radius: 12px;
+    }
+    
+    .input-modern:focus {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col">
 
-  <header class="topbar">
-    <div class="page-wrap flex items-center justify-between">
-      <span id="portal-title" class="font-bold text-xl">Portal do Cliente</span>
-      <div class="flex items-center gap-2">
-        <button id="toggle-dark" class="px-3 py-1 bg-white/10 rounded text-sm hover:bg-white/20">Alternar Tema</button>
-        <button id="logout-button" class="text-sm hover:underline">Sair</button>
+<body>
+  
+  <!-- HEADER -->
+  <header class="sticky top-0 z-50" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+    <div class="page-wrap flex items-center justify-between py-4 text-white">
+      <div>
+        <h1 class="font-bold text-2xl">📦 Portal do Cliente</h1>
+        <p id="user-name" class="text-sm opacity-90">Carregando...</p>
       </div>
+      <button id="logout-btn" class="bg-white/20 hover:bg-white/30 px-6 py-2 rounded-xl font-semibold transition-all btn-modern">
+        Sair
+      </button>
     </div>
   </header>
 
-  <main class="page-wrap flex-grow w-full">
-    <!-- KPI -->
-    <section id="client-dashboard" class="kpi-grid mb-6">
-      <div class="kpi kpi-blue">
-        <h3>Total de Operações</h3>
-        <p id="total-ops">0</p>
+  <main class="page-wrap mt-6 pb-12">
+    
+    <!-- KPIs -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="kpi kpi-gradient-1">
+        <h3>Minhas Operações</h3>
+        <p id="kpi-total">0</p>
       </div>
-      <div class="kpi kpi-green">
-        <h3>Operações On Time</h3>
-        <p id="on-time-ops">0</p>
+      
+      <div class="kpi kpi-gradient-2">
+        <h3>Em Atraso</h3>
+        <p id="kpi-late">0</p>
       </div>
-      <div class="kpi kpi-red">
-        <h3>Operações com Atraso</h3>
-        <p id="delayed-ops-pct">0%</p>
+      
+      <div class="kpi kpi-gradient-3">
+        <h3>Em Andamento</h3>
+        <p id="kpi-inprogress">0</p>
       </div>
-    </section>
-
-    <!-- Tabela -->
-    <section id="operations-section" class="card">
-      <div class="card-body">
-        <h2 class="text-2xl font-semibold mb-4">As Minhas Operações</h2>
-        <div class="table-wrap">
-          <table class="min-w-full table">
-            <thead>
-              <tr>
-                <th class="text-left">Nº Cliente</th>
-                <th class="text-left">Booking</th>
-                <th class="text-left">Container</th>
-                <th class="text-left">Previsão Início</th>
-                <th class="text-left">Início Execução</th>
-                <th class="text-left">Estado</th>
-              </tr>
-            </thead>
-            <tbody id="operations-table-body"></tbody>
-          </table>
+      
+      <div class="kpi kpi-gradient-4">
+        <h3>Concluídas</h3>
+        <p id="kpi-completed">0</p>
+      </div>
+    </div>
+    
+    <!-- FILTROS E BUSCA -->
+    <div class="glass-card p-6 mb-6">
+      <h2 class="text-2xl font-bold text-gray-900 mb-6">Minhas Operações</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div>
+          <label class="block text-sm font-semibold mb-2">Status</label>
+          <select id="filter-status" class="w-full input-modern border border-gray-300 p-3">
+            <option value="all">Todas</option>
+            <option value="ontime">No Prazo</option>
+            <option value="late">Em Atraso</option>
+            <option value="inprogress">Em Andamento</option>
+            <option value="completed">Concluídas</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-semibold mb-2">Período</label>
+          <select id="filter-range" class="w-full input-modern border border-gray-300 p-3">
+            <option value="7d">7 dias</option>
+            <option value="30d" selected>30 dias</option>
+            <option value="90d">90 dias</option>
+            <option value="all">Tudo</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-semibold mb-2">Busca</label>
+          <input id="filter-booking" type="text" placeholder="Booking/Container"
+            class="w-full input-modern border border-gray-300 p-3" />
+        </div>
+        
+        <div class="flex items-end">
+          <button id="clear-filters" class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">
+            Limpar Filtros
+          </button>
         </div>
       </div>
-    </section>
-
-    <!-- FAQ -->
-    <section id="faq-section" class="card mt-6">
-      <div class="card-body">
-        <h2 class="text-2xl font-semibold mb-4">Perguntas Frequentes (FAQ)</h2>
-        <div class="space-y-4">
-          <details class="border-b pb-2">
-            <summary class="font-semibold">O que significa "Previsão Início"?</summary>
-            <p class="mt-2 text-sm text-gray-600">Data e hora programadas para o início da operação.</p>
-          </details>
-          <details class="border-b pb-2">
-            <summary class="font-semibold">O que significa "Início Execução"?</summary>
-            <p class="mt-2 text-sm text-gray-600">Data/hora reais de início. A diferença para a previsão indica atraso ou pontualidade.</p>
-          </details>
-          <details class="border-b pb-2">
-            <summary class="font-semibold">Como é calculado o atraso?</summary>
-            <p class="mt-2 text-sm text-gray-600">Considera a diferença entre “Previsão Início” e “Início Execução”. Se a previsão já passou e não iniciou, o atraso conta em tempo real.</p>
-          </details>
-          <details class="border-b pb-2">
-            <summary class="font-semibold">Com quem falar em caso de problema?</summary>
-            <p class="mt-2 text-sm text-gray-600">
-              Contato do time de atendimento:
-              <a href="mailto:atendimento@mercosul-line.com.br" class="text-blue-600 hover:underline">atendimento@mercosul-line.com.br</a> | tel 13 3226-2872.
-            </p>
-          </details>
-          <details class="border-b pb-2">
-            <summary class="font-semibold">Onde consultar o dead line do navio?</summary>
-            <p class="mt-2 text-sm text-gray-600">
-              Programação disponível em
-              <a href="http://mercosul-line.com.br/servicos/rotas/programacao" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">mercosul-line.com.br/servicos/rotas/programacao</a>.
-            </p>
-          </details>
-          <details class="border-b pb-2">
-            <summary class="font-semibold">O que é e como declarar o VGM?</summary>
-            <p class="mt-2 text-sm text-gray-600">
-              VGM (“Verified Gross Mass”) é obrigatório pela SOLAS/IMO.
-              Declare no portal:
-              <a href="https://dashboard.mercosul-line.com.br/access/login" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">dashboard.mercosul-line.com.br</a>.
-            </p>
-          </details>
+      
+      <!-- Lista de Operações -->
+      <div id="operations-list" class="space-y-3">
+        <div class="text-center py-12">
+          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          <p class="text-gray-500 mt-4">Carregando operações...</p>
         </div>
       </div>
-    </section>
+      
+    </div>
+    
   </main>
 
-  <footer class="bg-gray-800 text-white text-center p-4 text-sm">
-    &copy; 2025 Rastreamento
-  </footer>
-
+  <!-- Scripts -->
   <script>
     const __firebase_config = JSON.stringify({
       apiKey: "AIzaSyAqz0eAaJwE38EAyTgbRk4CZryswDqvSBY",
       authDomain: "mercosul-teste.firebaseapp.com",
       projectId: "mercosul-teste",
-      storageBucket: "mercosul-teste.appspot.com",
-      messagingSenderId: "650943607449",
       appId: "1:650943607449:web:73ec91b430ccaa55b77e08",
       measurementId: "G-KJHFXFLJ6K"
     });
-    const __app_id = "mercosul-line";
   </script>
-  <script type="module" src="js/portal.js"></script>
+  
+  <script type="module" src="./js/config.js"></script>
+  <script type="module" src="./js/utilities.js"></script>
+  <script type="module" src="./js/portal.js"></script>
+  
 </body>
 </html>
