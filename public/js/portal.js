@@ -234,19 +234,19 @@ function renderOperations() {
     const delayText = delay > 0 ? formatMinutesToHHMM(delay) : "ON TIME";
     const isLate = delay > 0;
     const isCompleted = !!op.dt_fim_execucao;
-    
-    const statusColor = isCompleted 
+
+    const statusColor = isCompleted
       ? 'bg-gray-100 text-gray-700'
-      : isLate 
-        ? 'bg-red-100 text-red-700' 
+      : isLate
+        ? 'bg-red-100 text-red-700'
         : 'bg-green-100 text-green-700';
-    
-    const statusText = isCompleted 
-      ? '✅ Concluída' 
-      : isLate 
-        ? '⏰ Em Atraso' 
+
+    const statusText = isCompleted
+      ? '✅ Concluída'
+      : isLate
+        ? '⏰ Em Atraso'
         : '🚢 No Prazo';
-    
+
     return `
       <div class="glass-card p-5 border-l-4 ${isCompleted ? 'border-gray-400' : isLate ? 'border-red-500' : 'border-green-500'}">
         <div class="flex items-start justify-between mb-4">
@@ -258,71 +258,80 @@ function renderOperations() {
             ${statusText}
           </span>
         </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
           <div>
-            <span class="font-semibold text-gray-700">Porto:</span>
-            <p class="text-gray-900">${op.porto_operacao || 'N/A'}</p>
+            <span class="font-semibold text-gray-700">Embarcador:</span>
+            <span class="text-gray-900 ml-2">${op.embarcador_nome || 'N/A'}</span>
           </div>
-          
+
+          <div>
+            <span class="font-semibold text-gray-700">Booking:</span>
+            <span class="text-gray-900 ml-2">${op.booking || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Container:</span>
+            <span class="text-gray-900 ml-2">${op.container || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Tipo Prog.:</span>
+            <span class="text-gray-900 ml-2">${op.status_operacao || 'N/A'}</span>
+          </div>
+
           <div>
             <span class="font-semibold text-gray-700">Previsão Início:</span>
-            <p class="text-gray-900">${formatDateTime(op.previsao_inicio_atendimento)}</p>
+            <span class="text-gray-900 ml-2">${formatDateTime(op.previsao_inicio_atendimento)}</span>
           </div>
-          
-          <div>
-            <span class="font-semibold text-gray-700">Início Execução:</span>
-            <p class="text-gray-900">${formatDateTime(op.dt_inicio_execucao)}</p>
-          </div>
-          
+
           <div>
             <span class="font-semibold text-gray-700">Previsão Entrega:</span>
-            <p class="text-gray-900">${formatDateTime(op.dt_previsao_entrega_recalculada)}</p>
+            <span class="text-gray-900 ml-2">${formatDateTime(op.dt_previsao_entrega_recalculada)}</span>
           </div>
-          
+
+          <div>
+            <span class="font-semibold text-gray-700">Início Execução:</span>
+            <span class="text-gray-900 ml-2">${formatDateTime(op.dt_inicio_execucao)}</span>
+          </div>
+
           <div>
             <span class="font-semibold text-gray-700">Fim Execução:</span>
-            <p class="text-gray-900">${formatDateTime(op.dt_fim_execucao)}</p>
+            <span class="text-gray-900 ml-2">${formatDateTime(op.dt_fim_execucao)}</span>
           </div>
-          
+
           <div>
-            <span class="font-semibold text-gray-700">Atraso:</span>
-            <p class="${isLate ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}">
-              ${delayText}
-            </p>
+            <span class="font-semibold text-gray-700">Motorista:</span>
+            <span class="text-gray-900 ml-2">${op.motorista || op.nome_motorista || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">CPF:</span>
+            <span class="text-gray-900 ml-2">${op.cpf_motorista || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Veículo:</span>
+            <span class="text-gray-900 ml-2">${op.placa_veiculo || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Reboque:</span>
+            <span class="text-gray-900 ml-2">${op.placa_carreta || 'N/A'}</span>
+          </div>
+
+          <div class="md:col-span-2 pt-2 border-t border-gray-100 mt-2">
+            <span class="font-semibold text-gray-700">Justificativa Atraso:</span>
+            <span class="text-gray-900 ml-2">${op.justificativa_atraso || '-'}</span>
           </div>
         </div>
-        
-        ${op.motorista ? `
-          <div class="mt-4 pt-4 border-t border-gray-200">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span class="font-semibold text-gray-700">Motorista:</span>
-                <p class="text-gray-900">${op.motorista}</p>
-              </div>
-              <div>
-                <span class="font-semibold text-gray-700">Veículo:</span>
-                <p class="text-gray-900">${op.placa_veiculo || 'N/A'}</p>
-              </div>
-              <div>
-                <span class="font-semibold text-gray-700">Reboque:</span>
-                <p class="text-gray-900">${op.placa_carreta || 'N/A'}</p>
-              </div>
-            </div>
-          </div>
-        ` : ''}
-        
-        ${op.justificativa_atraso && op.justificativa_atraso !== '-' ? `
-          <div class="mt-4 pt-4 border-t border-gray-200">
-            <span class="font-semibold text-gray-700">Justificativa de Atraso:</span>
-            <p class="text-gray-900 mt-1">${op.justificativa_atraso}</p>
-          </div>
-        ` : ''}
       </div>
     `;
   }).join('');
-  
+
+  console.log("✅ HTML gerado, atualizando DOM...");
   operationsListEl.innerHTML = html;
+  console.log("✅ DOM atualizado com sucesso!");
 }
 
 // MOSTRAR ERRO
