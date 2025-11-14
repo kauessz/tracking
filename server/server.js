@@ -663,8 +663,11 @@ app.get("/portal/myOps", authMiddleware, async (req, res) => {
       .select(`
         id, booking, containers, tipo_programacao,
         previsao_inicio_atendimento, dt_inicio_execucao, dt_fim_execucao,
+        dt_previsao_entrega_recalculada,
         justificativa_atraso, status_operacao, pol, pod, motivo_atraso,
-        embarcador_id
+        embarcador_id,
+        nome_motorista, cpf_motorista, placa_veiculo, placa_carreta,
+        embarcadores (nome_principal)
       `)
       .eq("embarcador_id", internal.embarcador_id)
       .order("previsao_inicio_atendimento", { ascending: false })
@@ -679,16 +682,25 @@ app.get("/portal/myOps", authMiddleware, async (req, res) => {
       if (tipo.startsWith("entreg")) porto_operacao = row.pod || null;
 
       return {
+        id: row.id || null,
         booking: row.booking || null,
+        container: row.containers || null,
         containers: row.containers || null,
         tipo_programacao: row.tipo_programacao || null,
         previsao_inicio_atendimento: row.previsao_inicio_atendimento || null,
         dt_inicio_execucao: row.dt_inicio_execucao || null,
         dt_fim_execucao: row.dt_fim_execucao || null,
+        dt_previsao_entrega_recalculada: row.dt_previsao_entrega_recalculada || null,
         justificativa_atraso: row.justificativa_atraso || null,
         motivo_atraso: row.motivo_atraso || null,
         status_operacao: row.status_operacao || null,
         porto_operacao,
+        embarcador_nome: row.embarcadores?.nome_principal || null,
+        motorista: row.nome_motorista || null,
+        nome_motorista: row.nome_motorista || null,
+        cpf_motorista: row.cpf_motorista || null,
+        placa_veiculo: row.placa_veiculo || null,
+        placa_carreta: row.placa_carreta || null,
       };
     });
 
