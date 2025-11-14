@@ -105,8 +105,8 @@ function normalizeOp(raw) {
 // FETCH OPERAÇÕES
 async function fetchMyOperations() {
   try {
-    const resp = await fetch(`${API_BASE}/portal/myOperations`, {
-      headers: { 
+    const resp = await fetch(`${API_BASE}/portal/myOps`, {
+      headers: {
         Authorization: `Bearer ${authToken}`,
         'Cache-Control': 'no-cache'
       }

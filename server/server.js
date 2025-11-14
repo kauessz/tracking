@@ -402,14 +402,28 @@ app.get("/trackingList", async (req, res) => {
 
     const { data, error } = await supabase
       .from("operacoes")
-      .select("*")
+      .select(`
+        id, booking, containers,
+        previsao_inicio_atendimento, dt_inicio_execucao, dt_fim_execucao,
+        dt_previsao_entrega_recalculada,
+        nome_motorista, cpf_motorista, placa_veiculo, placa_carreta,
+        justificativa_atraso, status_operacao,
+        embarcadores (nome_principal)
+      `)
       .or(`booking.ilike.%${q}%,containers.ilike.%${q}%`)
       .order("id", { ascending: false })
       .limit(50);
 
     if (error) throw error;
 
-    return res.json({ success: true, items: data || [] });
+    // Mapeia dados para formato esperado pelo frontend
+    const items = (data || []).map(row => ({
+      ...row,
+      embarcador_nome: row.embarcadores?.nome_principal || null,
+      container: row.containers || null
+    }));
+
+    return res.json({ success: true, items });
   } catch (err) {
     console.error("trackingList error:", err);
     return res.status(500).json({ success: false, error: "Erro consultando Supabase" });
@@ -688,9 +702,9 @@ app.get("/portal/myOps", authMiddleware, async (req, res) => {
 });
 
 /* -------------------------------------------------
-   ✅ OCORRÊNCIAS - CRIAR
+   ✅ OCORRÊNCIAS - CRIAR (PÚBLICA - sem autenticação)
 ------------------------------------------------- */
-app.post("/ocorrencias/create", authMiddleware, async (req, res) => {
+app.post("/ocorrencias/create", async (req, res) => {
   try {
     const {
       booking,
@@ -703,11 +717,11 @@ app.post("/ocorrencias/create", authMiddleware, async (req, res) => {
       nova_previsao
     } = req.body;
 
-    if (!booking || !embarcador_nome || !tipo_ocorrencia || !descricao) {
+    if (!booking || !tipo_ocorrencia || !descricao) {
       return res.status(400).json({
         success: false,
         error: "missing_fields",
-        message: "Booking, embarcador, tipo e descrição são obrigatórios"
+        message: "Booking, tipo e descrição são obrigatórios"
       });
     }
 
@@ -716,21 +730,21 @@ app.post("/ocorrencias/create", authMiddleware, async (req, res) => {
       .insert({
         booking,
         container: container || null,
-        embarcador_nome,
+        embarcador_nome: embarcador_nome || "Não informado",
         porto: porto || null,
         previsao_inicio_atendimento: previsao_original || null,
         tipo_ocorrencia,
         descricao_ocorrencia: descricao,
         nova_previsao: nova_previsao || null,
         status: 'pendente',
-        criado_por: req.user.email || null
+        criado_por: 'Formulário Público'
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    console.log("✅ Ocorrência criada:", data);
+    console.log("✅ Ocorrência pública criada:", data);
 
     return res.json({
       success: true,
