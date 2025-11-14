@@ -8,6 +8,9 @@
 // 5. Aba de Ocorrências integrada ao backend
 // 6. Fluxo de aprovação de usuários com tipo de conta e embarcador
 //
+
+console.log("🚀 admin.js - INÍCIO DO CARREGAMENTO");
+
 // ------------------------------------------------------
 // IMPORTS FIREBASE (CDN modular)
 // ------------------------------------------------------

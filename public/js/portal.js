@@ -383,49 +383,66 @@ function setupEventListeners() {
 
 // INIT
 onAuthStateChanged(auth, async (user) => {
+  console.log("🎬 Portal - onAuthStateChanged disparado");
+  console.log("👤 Usuário:", user ? user.email : "nenhum");
+
   if (!user) {
+    console.log("❌ Sem usuário, redirecionando...");
     window.location.href = "index.html";
     return;
   }
-  
+
+  console.log("✅ Obtendo token...");
   authToken = await user.getIdToken(true);
-  
+  console.log("🔑 Token:", authToken ? "OK" : "FALHOU");
+
   try {
+    console.log("📡 Validando acesso via /auth/whoami...");
+
     // Verifica se é um usuário ativo
     const whoResp = await fetch(`${API_BASE}/auth/whoami`, {
       headers: { Authorization: `Bearer ${authToken}` }
     });
-    
+
+    console.log("📡 Status whoami:", whoResp.status);
+
     const whoData = await whoResp.json();
-    
+    console.log("📦 Dados whoami:", whoData);
+
     if (!whoData.success || whoData.user?.status !== "ativo") {
+      console.error("❌ Usuário sem acesso ativo:", whoData);
       alert("Usuário sem acesso ativo.");
       window.location.href = "index.html";
       return;
     }
-    
+
     if (whoData.user.role === "admin") {
+      console.log("🔀 Usuário é admin, redirecionando...");
       window.location.href = "admin.html";
       return;
     }
-    
+
+    console.log("✅ Usuário é embarcador ativo!");
     currentUser = whoData.user;
-    
+
     // Atualiza nome do usuário
     if (userNameEl) {
       userNameEl.textContent = `Olá, ${currentUser.nome || user.email}`;
     }
-    
+
+    console.log("🚀 Chamando fetchMyOperations...");
     // Carrega operações
     await fetchMyOperations();
-    
+    console.log("✅ fetchMyOperations concluído");
+
   } catch (err) {
-    console.error("Erro na inicialização:", err);
+    console.error("❌ Erro na inicialização:", err);
+    console.error("❌ Stack:", err.stack);
     showError("Falha ao validar acesso. Tente fazer login novamente.");
   }
-  
+
   setupEventListeners();
-  
+
   console.log("✅ Portal.js inicializado");
   console.log("🔗 API Base:", API_BASE);
 });
