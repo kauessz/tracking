@@ -706,6 +706,9 @@ app.get("/portal/myOps", authMiddleware, async (req, res) => {
 ------------------------------------------------- */
 app.post("/ocorrencias/create", async (req, res) => {
   try {
+    console.log("📝 Recebendo requisição de ocorrência...");
+    console.log("📦 Body:", req.body);
+
     const {
       booking,
       container,
@@ -718,6 +721,7 @@ app.post("/ocorrencias/create", async (req, res) => {
     } = req.body;
 
     if (!booking || !tipo_ocorrencia || !descricao) {
+      console.log("❌ Campos obrigatórios faltando");
       return res.status(400).json({
         success: false,
         error: "missing_fields",
@@ -725,24 +729,32 @@ app.post("/ocorrencias/create", async (req, res) => {
       });
     }
 
+    const payload = {
+      booking,
+      container: container || null,
+      embarcador_nome: embarcador_nome || "Não informado",
+      porto: porto || null,
+      previsao_inicio_atendimento: previsao_original || null,
+      tipo_ocorrencia,
+      descricao_ocorrencia: descricao,
+      nova_previsao: nova_previsao || null,
+      status: 'pendente',
+      criado_por: 'Formulário Público'
+    };
+
+    console.log("📤 Payload para Supabase:", payload);
+
     const { data, error } = await supabase
       .from("ocorrencias")
-      .insert({
-        booking,
-        container: container || null,
-        embarcador_nome: embarcador_nome || "Não informado",
-        porto: porto || null,
-        previsao_inicio_atendimento: previsao_original || null,
-        tipo_ocorrencia,
-        descricao_ocorrencia: descricao,
-        nova_previsao: nova_previsao || null,
-        status: 'pendente',
-        criado_por: 'Formulário Público'
-      })
+      .insert(payload)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("❌ Erro Supabase:", error);
+      console.error("❌ Detalhes:", JSON.stringify(error, null, 2));
+      throw error;
+    }
 
     console.log("✅ Ocorrência pública criada:", data);
 
@@ -753,7 +765,13 @@ app.post("/ocorrencias/create", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ /ocorrencias/create error:", err);
-    return res.status(500).json({ success: false, error: "server_error_create_occurrence" });
+    console.error("❌ Stack:", err.stack);
+    return res.status(500).json({
+      success: false,
+      error: "server_error_create_occurrence",
+      details: err.message,
+      hint: err.hint || null
+    });
   }
 });
 

@@ -105,40 +105,52 @@ function normalizeOp(raw) {
 // FETCH OPERAÇÕES
 async function fetchMyOperations() {
   try {
+    console.log("🔄 Buscando operações do portal...");
+    console.log("🔗 URL:", `${API_BASE}/portal/myOps`);
+    console.log("🔑 Token:", authToken ? "presente" : "ausente");
+
     const resp = await fetch(`${API_BASE}/portal/myOps`, {
       headers: {
         Authorization: `Bearer ${authToken}`,
         'Cache-Control': 'no-cache'
       }
     });
-    
+
+    console.log("📡 Response status:", resp.status);
+
     const data = await resp.json();
-    
+    console.log("📦 Data recebida:", data);
+
     if (data.success) {
+      console.log("✅ Sucesso! Total de itens:", data.items?.length || 0);
       state.allOps = (data.items || []).map(normalizeOp);
+      console.log("🗂️ Operações normalizadas:", state.allOps.length);
       applyFilters();
       updateKPIs();
     } else {
-      console.error("Erro ao carregar operações:", data);
+      console.error("❌ Erro no backend:", data);
       state.allOps = [];
       renderOperations();
     }
   } catch (err) {
-    console.error("Erro fetchMyOperations:", err);
+    console.error("❌ Erro fetchMyOperations:", err);
     showError("Falha ao carregar operações. Tente novamente.");
   }
 }
 
 // FILTROS
 function applyFilters() {
+  console.log("🔍 Aplicando filtros...");
+  console.log("📊 Total de operações antes dos filtros:", state.allOps.length);
+
   let filtered = [...state.allOps];
-  
+
   // Filtro de status
   if (state.filters.status !== 'all') {
     filtered = filtered.filter(op => {
       const delay = calculateDelayInMinutes(op);
       const hasEnd = !!op.dt_fim_execucao;
-      
+
       switch (state.filters.status) {
         case 'ontime':
           return delay <= 0 && !hasEnd;
@@ -153,19 +165,19 @@ function applyFilters() {
       }
     });
   }
-  
+
   // Filtro de período
   if (state.filters.range !== 'all') {
     const now = new Date();
     const days = parseInt(state.filters.range) || 30;
     const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    
+
     filtered = filtered.filter(op => {
       const date = new Date(op.previsao_inicio_atendimento);
       return date >= cutoff;
     });
   }
-  
+
   // Filtro de busca
   if (state.filters.search) {
     const search = state.filters.search.toLowerCase();
@@ -177,8 +189,9 @@ function applyFilters() {
       );
     });
   }
-  
+
   state.filteredOps = filtered;
+  console.log("✅ Operações após filtros:", state.filteredOps.length);
   renderOperations();
 }
 
@@ -197,9 +210,17 @@ function updateKPIs() {
 
 // RENDERIZAR OPERAÇÕES
 function renderOperations() {
-  if (!operationsListEl) return;
-  
+  console.log("🎨 Renderizando operações...");
+  console.log("📋 Elemento operations-list:", operationsListEl ? "encontrado" : "NÃO ENCONTRADO");
+  console.log("📊 Operações filtradas:", state.filteredOps.length);
+
+  if (!operationsListEl) {
+    console.error("❌ Elemento #operations-list não encontrado no DOM!");
+    return;
+  }
+
   if (state.filteredOps.length === 0) {
+    console.log("⚠️ Nenhuma operação para exibir");
     operationsListEl.innerHTML = `
       <p class="text-gray-500 text-center py-12">
         Nenhuma operação encontrada com os filtros aplicados.
