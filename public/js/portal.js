@@ -105,40 +105,52 @@ function normalizeOp(raw) {
 // FETCH OPERAÇÕES
 async function fetchMyOperations() {
   try {
+    console.log("🔄 Buscando operações do portal...");
+    console.log("🔗 URL:", `${API_BASE}/portal/myOps`);
+    console.log("🔑 Token:", authToken ? "presente" : "ausente");
+
     const resp = await fetch(`${API_BASE}/portal/myOps`, {
       headers: {
         Authorization: `Bearer ${authToken}`,
         'Cache-Control': 'no-cache'
       }
     });
-    
+
+    console.log("📡 Response status:", resp.status);
+
     const data = await resp.json();
-    
+    console.log("📦 Data recebida:", data);
+
     if (data.success) {
+      console.log("✅ Sucesso! Total de itens:", data.items?.length || 0);
       state.allOps = (data.items || []).map(normalizeOp);
+      console.log("🗂️ Operações normalizadas:", state.allOps.length);
       applyFilters();
       updateKPIs();
     } else {
-      console.error("Erro ao carregar operações:", data);
+      console.error("❌ Erro no backend:", data);
       state.allOps = [];
       renderOperations();
     }
   } catch (err) {
-    console.error("Erro fetchMyOperations:", err);
+    console.error("❌ Erro fetchMyOperations:", err);
     showError("Falha ao carregar operações. Tente novamente.");
   }
 }
 
 // FILTROS
 function applyFilters() {
+  console.log("🔍 Aplicando filtros...");
+  console.log("📊 Total de operações antes dos filtros:", state.allOps.length);
+
   let filtered = [...state.allOps];
-  
+
   // Filtro de status
   if (state.filters.status !== 'all') {
     filtered = filtered.filter(op => {
       const delay = calculateDelayInMinutes(op);
       const hasEnd = !!op.dt_fim_execucao;
-      
+
       switch (state.filters.status) {
         case 'ontime':
           return delay <= 0 && !hasEnd;
@@ -153,19 +165,19 @@ function applyFilters() {
       }
     });
   }
-  
+
   // Filtro de período
   if (state.filters.range !== 'all') {
     const now = new Date();
     const days = parseInt(state.filters.range) || 30;
     const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    
+
     filtered = filtered.filter(op => {
       const date = new Date(op.previsao_inicio_atendimento);
       return date >= cutoff;
     });
   }
-  
+
   // Filtro de busca
   if (state.filters.search) {
     const search = state.filters.search.toLowerCase();
@@ -177,8 +189,9 @@ function applyFilters() {
       );
     });
   }
-  
+
   state.filteredOps = filtered;
+  console.log("✅ Operações após filtros:", state.filteredOps.length);
   renderOperations();
 }
 
@@ -197,9 +210,17 @@ function updateKPIs() {
 
 // RENDERIZAR OPERAÇÕES
 function renderOperations() {
-  if (!operationsListEl) return;
-  
+  console.log("🎨 Renderizando operações...");
+  console.log("📋 Elemento operations-list:", operationsListEl ? "encontrado" : "NÃO ENCONTRADO");
+  console.log("📊 Operações filtradas:", state.filteredOps.length);
+
+  if (!operationsListEl) {
+    console.error("❌ Elemento #operations-list não encontrado no DOM!");
+    return;
+  }
+
   if (state.filteredOps.length === 0) {
+    console.log("⚠️ Nenhuma operação para exibir");
     operationsListEl.innerHTML = `
       <p class="text-gray-500 text-center py-12">
         Nenhuma operação encontrada com os filtros aplicados.
@@ -213,19 +234,19 @@ function renderOperations() {
     const delayText = delay > 0 ? formatMinutesToHHMM(delay) : "ON TIME";
     const isLate = delay > 0;
     const isCompleted = !!op.dt_fim_execucao;
-    
-    const statusColor = isCompleted 
+
+    const statusColor = isCompleted
       ? 'bg-gray-100 text-gray-700'
-      : isLate 
-        ? 'bg-red-100 text-red-700' 
+      : isLate
+        ? 'bg-red-100 text-red-700'
         : 'bg-green-100 text-green-700';
-    
-    const statusText = isCompleted 
-      ? '✅ Concluída' 
-      : isLate 
-        ? '⏰ Em Atraso' 
+
+    const statusText = isCompleted
+      ? '✅ Concluída'
+      : isLate
+        ? '⏰ Em Atraso'
         : '🚢 No Prazo';
-    
+
     return `
       <div class="glass-card p-5 border-l-4 ${isCompleted ? 'border-gray-400' : isLate ? 'border-red-500' : 'border-green-500'}">
         <div class="flex items-start justify-between mb-4">
@@ -237,71 +258,80 @@ function renderOperations() {
             ${statusText}
           </span>
         </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
           <div>
-            <span class="font-semibold text-gray-700">Porto:</span>
-            <p class="text-gray-900">${op.porto_operacao || 'N/A'}</p>
+            <span class="font-semibold text-gray-700">Embarcador:</span>
+            <span class="text-gray-900 ml-2">${op.embarcador_nome || 'N/A'}</span>
           </div>
-          
+
+          <div>
+            <span class="font-semibold text-gray-700">Booking:</span>
+            <span class="text-gray-900 ml-2">${op.booking || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Container:</span>
+            <span class="text-gray-900 ml-2">${op.container || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Tipo Prog.:</span>
+            <span class="text-gray-900 ml-2">${op.status_operacao || 'N/A'}</span>
+          </div>
+
           <div>
             <span class="font-semibold text-gray-700">Previsão Início:</span>
-            <p class="text-gray-900">${formatDateTime(op.previsao_inicio_atendimento)}</p>
+            <span class="text-gray-900 ml-2">${formatDateTime(op.previsao_inicio_atendimento)}</span>
           </div>
-          
-          <div>
-            <span class="font-semibold text-gray-700">Início Execução:</span>
-            <p class="text-gray-900">${formatDateTime(op.dt_inicio_execucao)}</p>
-          </div>
-          
+
           <div>
             <span class="font-semibold text-gray-700">Previsão Entrega:</span>
-            <p class="text-gray-900">${formatDateTime(op.dt_previsao_entrega_recalculada)}</p>
+            <span class="text-gray-900 ml-2">${formatDateTime(op.dt_previsao_entrega_recalculada)}</span>
           </div>
-          
+
+          <div>
+            <span class="font-semibold text-gray-700">Início Execução:</span>
+            <span class="text-gray-900 ml-2">${formatDateTime(op.dt_inicio_execucao)}</span>
+          </div>
+
           <div>
             <span class="font-semibold text-gray-700">Fim Execução:</span>
-            <p class="text-gray-900">${formatDateTime(op.dt_fim_execucao)}</p>
+            <span class="text-gray-900 ml-2">${formatDateTime(op.dt_fim_execucao)}</span>
           </div>
-          
+
           <div>
-            <span class="font-semibold text-gray-700">Atraso:</span>
-            <p class="${isLate ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}">
-              ${delayText}
-            </p>
+            <span class="font-semibold text-gray-700">Motorista:</span>
+            <span class="text-gray-900 ml-2">${op.motorista || op.nome_motorista || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">CPF:</span>
+            <span class="text-gray-900 ml-2">${op.cpf_motorista || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Veículo:</span>
+            <span class="text-gray-900 ml-2">${op.placa_veiculo || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Reboque:</span>
+            <span class="text-gray-900 ml-2">${op.placa_carreta || 'N/A'}</span>
+          </div>
+
+          <div class="md:col-span-2 pt-2 border-t border-gray-100 mt-2">
+            <span class="font-semibold text-gray-700">Justificativa Atraso:</span>
+            <span class="text-gray-900 ml-2">${op.justificativa_atraso || '-'}</span>
           </div>
         </div>
-        
-        ${op.motorista ? `
-          <div class="mt-4 pt-4 border-t border-gray-200">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div>
-                <span class="font-semibold text-gray-700">Motorista:</span>
-                <p class="text-gray-900">${op.motorista}</p>
-              </div>
-              <div>
-                <span class="font-semibold text-gray-700">Veículo:</span>
-                <p class="text-gray-900">${op.placa_veiculo || 'N/A'}</p>
-              </div>
-              <div>
-                <span class="font-semibold text-gray-700">Reboque:</span>
-                <p class="text-gray-900">${op.placa_carreta || 'N/A'}</p>
-              </div>
-            </div>
-          </div>
-        ` : ''}
-        
-        ${op.justificativa_atraso && op.justificativa_atraso !== '-' ? `
-          <div class="mt-4 pt-4 border-t border-gray-200">
-            <span class="font-semibold text-gray-700">Justificativa de Atraso:</span>
-            <p class="text-gray-900 mt-1">${op.justificativa_atraso}</p>
-          </div>
-        ` : ''}
       </div>
     `;
   }).join('');
-  
+
+  console.log("✅ HTML gerado, atualizando DOM...");
   operationsListEl.innerHTML = html;
+  console.log("✅ DOM atualizado com sucesso!");
 }
 
 // MOSTRAR ERRO
@@ -362,49 +392,66 @@ function setupEventListeners() {
 
 // INIT
 onAuthStateChanged(auth, async (user) => {
+  console.log("🎬 Portal - onAuthStateChanged disparado");
+  console.log("👤 Usuário:", user ? user.email : "nenhum");
+
   if (!user) {
+    console.log("❌ Sem usuário, redirecionando...");
     window.location.href = "index.html";
     return;
   }
-  
+
+  console.log("✅ Obtendo token...");
   authToken = await user.getIdToken(true);
-  
+  console.log("🔑 Token:", authToken ? "OK" : "FALHOU");
+
   try {
+    console.log("📡 Validando acesso via /auth/whoami...");
+
     // Verifica se é um usuário ativo
     const whoResp = await fetch(`${API_BASE}/auth/whoami`, {
       headers: { Authorization: `Bearer ${authToken}` }
     });
-    
+
+    console.log("📡 Status whoami:", whoResp.status);
+
     const whoData = await whoResp.json();
-    
+    console.log("📦 Dados whoami:", whoData);
+
     if (!whoData.success || whoData.user?.status !== "ativo") {
+      console.error("❌ Usuário sem acesso ativo:", whoData);
       alert("Usuário sem acesso ativo.");
       window.location.href = "index.html";
       return;
     }
-    
+
     if (whoData.user.role === "admin") {
+      console.log("🔀 Usuário é admin, redirecionando...");
       window.location.href = "admin.html";
       return;
     }
-    
+
+    console.log("✅ Usuário é embarcador ativo!");
     currentUser = whoData.user;
-    
+
     // Atualiza nome do usuário
     if (userNameEl) {
       userNameEl.textContent = `Olá, ${currentUser.nome || user.email}`;
     }
-    
+
+    console.log("🚀 Chamando fetchMyOperations...");
     // Carrega operações
     await fetchMyOperations();
-    
+    console.log("✅ fetchMyOperations concluído");
+
   } catch (err) {
-    console.error("Erro na inicialização:", err);
+    console.error("❌ Erro na inicialização:", err);
+    console.error("❌ Stack:", err.stack);
     showError("Falha ao validar acesso. Tente fazer login novamente.");
   }
-  
+
   setupEventListeners();
-  
+
   console.log("✅ Portal.js inicializado");
   console.log("🔗 API Base:", API_BASE);
 });

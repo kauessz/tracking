@@ -8,6 +8,9 @@
 // 5. Aba de Ocorrências integrada ao backend
 // 6. Fluxo de aprovação de usuários com tipo de conta e embarcador
 //
+
+console.log("🚀 admin.js - INÍCIO DO CARREGAMENTO");
+
 // ------------------------------------------------------
 // IMPORTS FIREBASE (CDN modular)
 // ------------------------------------------------------
@@ -1676,32 +1679,57 @@ function wireLogout() {
 // INIT AUTH + LOAD
 // ------------------------------------------------------
 onAuthStateChanged(auth, async (user) => {
+  console.log("🔐 Admin - onAuthStateChanged disparado");
+  console.log("👤 Usuário:", user ? user.email : "nenhum");
+
   if (!user) {
+    console.log("❌ Sem usuário, redirecionando para login...");
     window.location.href = "index.html";
     return;
   }
 
+  console.log("✅ Usuário autenticado, obtendo token...");
   authToken = await user.getIdToken(true);
+  console.log("🔑 Token obtido:", authToken ? "OK" : "FALHOU");
 
   try {
+    console.log("📡 Chamando /auth/whoami...");
+    console.log("🔗 URL:", `${API_BASE}/auth/whoami`);
+
     const who = await fetch(`${API_BASE}/auth/whoami`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
-    const whoJson = await who.json();
 
-    if (!whoJson.success || whoJson.user?.status !== "ativo") {
-      alert("Usuário sem acesso ativo.");
+    console.log("📡 Status da resposta whoami:", who.status);
+
+    const whoJson = await who.json();
+    console.log("📦 Resposta whoami:", whoJson);
+
+    if (!whoJson.success) {
+      console.error("❌ whoami.success =", whoJson.success);
+      alert("Usuário sem acesso ativo. Error: " + (whoJson.error || "desconhecido"));
       window.location.href = "index.html";
       return;
     }
+
+    if (whoJson.user?.status !== "ativo") {
+      console.error("❌ Status do usuário:", whoJson.user?.status);
+      alert("Usuário sem acesso ativo. Status: " + whoJson.user?.status);
+      window.location.href = "index.html";
+      return;
+    }
+
     if (whoJson.user.role !== "admin") {
-      alert("Acesso restrito a administradores.");
+      console.error("❌ Role do usuário:", whoJson.user.role);
+      alert("Acesso restrito a administradores. Você é: " + whoJson.user.role);
       window.location.href = "portal.html";
       return;
     }
+
+    console.log("✅ Validação OK! Usuário é admin ativo");
   } catch (err) {
-    console.error("Erro whoami:", err);
-    alert("Falha ao validar acesso administrativo.");
+    console.error("❌ Erro whoami:", err);
+    alert("Falha ao validar acesso administrativo: " + err.message);
     window.location.href = "index.html";
     return;
   }
