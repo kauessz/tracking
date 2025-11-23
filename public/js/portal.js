@@ -183,6 +183,7 @@ function applyFilters() {
     });
   }
 
+<<<<<<< HEAD
   // ✅ NOVO: Filtro de data específica (tem prioridade sobre período)
   if (state.filters.date) {
     const targetDate = new Date(state.filters.date);
@@ -197,6 +198,8 @@ function applyFilters() {
     });
   }
 
+=======
+>>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
   // Filtro de busca
   if (state.filters.search) {
     const search = state.filters.search.toLowerCase();
@@ -291,7 +294,11 @@ function renderOperations() {
 
           <div>
             <span class="font-semibold text-gray-700">Container:</span>
+<<<<<<< HEAD
             <span class="text-gray-900 ml-2">${op.containers || 'N/A'}</span>
+=======
+            <span class="text-gray-900 ml-2">${op.container || 'N/A'}</span>
+>>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
           </div>
 
           <div>
@@ -299,11 +306,14 @@ function renderOperations() {
             <span class="text-gray-900 ml-2">${op.status_operacao || 'N/A'}</span>
           </div>
 
+<<<<<<< HEAD
           <div>
             <span class="font-semibold text-gray-700">Porto Operação:</span>
             <span class="text-gray-900 ml-2">${op.porto_operacao || 'N/A'}</span>
           </div>
 
+=======
+>>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
           <div>
             <span class="font-semibold text-gray-700">Previsão Início:</span>
             <span class="text-gray-900 ml-2">${formatDateTime(op.previsao_inicio_atendimento)}</span>
@@ -322,6 +332,7 @@ function renderOperations() {
           <div>
             <span class="font-semibold text-gray-700">Fim Execução:</span>
             <span class="text-gray-900 ml-2">${formatDateTime(op.dt_fim_execucao)}</span>
+<<<<<<< HEAD
           </div>
 
           <div>
@@ -353,6 +364,33 @@ function renderOperations() {
           <div class="md:col-span-2">
             <span class="font-semibold text-gray-700">Motivo Atraso:</span>
             <span class="text-gray-900 ml-2">${op.motivo_atraso}</span>
+=======
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Motorista:</span>
+            <span class="text-gray-900 ml-2">${op.motorista || op.nome_motorista || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">CPF:</span>
+            <span class="text-gray-900 ml-2">${op.cpf_motorista || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Veículo:</span>
+            <span class="text-gray-900 ml-2">${op.placa_veiculo || 'N/A'}</span>
+          </div>
+
+          <div>
+            <span class="font-semibold text-gray-700">Reboque:</span>
+            <span class="text-gray-900 ml-2">${op.placa_carreta || 'N/A'}</span>
+          </div>
+
+          <div class="md:col-span-2 pt-2 border-t border-gray-100 mt-2">
+            <span class="font-semibold text-gray-700">Justificativa Atraso:</span>
+            <span class="text-gray-900 ml-2">${op.justificativa_atraso || '-'}</span>
+>>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
           </div>
           ` : ''}
         </div>
@@ -474,7 +512,11 @@ onAuthStateChanged(auth, async (user) => {
     console.log("✅ Usuário é embarcador ativo!");
     currentUser = whoData.user;
 
+<<<<<<< HEAD
     // ✅ CORREÇÃO PROBLEMA 5: Atualiza nome do usuário E ROLE
+=======
+    // Atualiza nome do usuário
+>>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
     if (userNameEl) {
       const roleDisplay = currentUser.role === 'embarcador' ? 'Embarcador' : 
                          currentUser.role === 'operador' ? 'Operador' : 
