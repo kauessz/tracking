@@ -20,7 +20,7 @@ export const getApiUrl = () => {
   
   if (isProduction) {
     // TODO: Substituir pela URL real do backend em produção
-    return 'https://seu-backend.onrender.com';
+    return 'https://tracking-api-1zxi.onrender.com';
   }
   
   return 'http://localhost:8080';
