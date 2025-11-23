@@ -1,9 +1,13 @@
-// public/js/utils.js
+// public/js/utils.js - VERSÃO CORRIGIDA FINAL
+// =====================================================
+// ✅ CORREÇÕES APLICADAS:
+// 1. Removida tolerância especial de Manaus (todos portos iguais)
+// 2. Cálculo de atraso unificado e consistente
+// 3. Valores negativos (adiantados) retornam 0
+// 4. REMOVIDO: Uso de "Data de previsão de entrega recalculada"
+// 5. REMOVIDO: Todos os console.log de debug
 
-// -----------------------------
 // Helpers de data
-// -----------------------------
-
 function excelSerialToDate(val) {
   const serial = Number(val);
   if (!isFinite(serial)) return null;
@@ -66,22 +70,91 @@ export function formatDateForDisplay(dateLike) {
   return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
 }
 
-// Usa tanto chaves do front (DataProgramada/DataChegada) quanto do backend
+// ============================================================================
+// ✅ CÁLCULO DE ATRASO CORRIGIDO
+// ============================================================================
+// REGRAS:
+// 1. Usa APENAS "Previsão início atendimento (BRA)" - NUNCA a recalculada
+// 2. Se não tiver "Dt Início da Execução", usa hora atual
+// 3. Número da programação é único por operação
+// 4. SEM console.log de debug (limpo)
+// ============================================================================
+
 export function calculateDelayInMinutes(op = {}) {
-  const sched = parseDate(
-    op.DataProgramada ??
-    op.previsao_inicio_atendimento
-  );
-  if (!sched) return 0;
+  // Helper para buscar valor em múltiplos campos possíveis
+  const get = (obj, keys = []) => {
+    for (const k of keys) {
+      if (obj && obj[k] != null && obj[k] !== '' && obj[k] !== '—' && obj[k] !== '-') {
+        return obj[k];
+      }
+    }
+    return null;
+  };
 
-  const actual = parseDate(
-    op.DataChegada ??
-    op.dt_inicio_execucao
-  ) || new Date();
+  // Helper para parse de data BR
+  const parseBR = (s) => {
+    if (!s || typeof s !== 'string') return null;
+    const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+    if (!m) return null;
+    const [_, dd, MM, yyyy, hh = '00', mm = '00'] = m;
+    return new Date(Number(yyyy), Number(MM) - 1, Number(dd), Number(hh), Number(mm), 0, 0);
+  };
 
-  const diffMs = actual.getTime() - sched.getTime();
-  const diffMin = Math.round(diffMs / 60000);
+  // 1. Verifica se está cancelada
+  const situacao = get(op, [
+    'SituacaoProgramacao',
+    'situacao', 
+    'status',
+    'TipoOperacao',
+    'tipo_programacao'
+  ]);
+  
+  if (situacao && situacao.toString().toLowerCase().includes('cancelad')) {
+    return 0;
+  }
+
+  // 2. ✅ CORREÇÃO CRÍTICA: Pega APENAS a previsão ORIGINAL
+  // NÃO usar previsão recalculada - ela é apenas informativa
+  const previsaoOriginalStr = get(op, [
+    'Previsão início atendimento (BRA)',
+    'Previsao inicio atendimento (BRA)',
+    'previsao_inicio_atendimento',
+    'PrevisaoInicio',
+    'DataProgramada',
+    'Data Programada'
+  ]);
+
+  const previsao = previsaoOriginalStr ? parseBR(previsaoOriginalStr) : null;
+  
+  if (!previsao) {
+    return 0; // Sem previsão, sem atraso
+  }
+
+  // 3. Pega o Dt Início da Execução OU usa hora atual
+  const inicioStr = get(op, [
+    'Dt Início da Execução (BRA)',
+    'Dt Inicio da Execução (BRA)',
+    'Dt Inicio da Execucao (BRA)',
+    'dt_inicio_execucao',
+    'DataChegada',
+    'Data Chegada'
+  ]);
+
+  // ✅ Se não tiver início da execução, usa HORA ATUAL
+  let atualDt = inicioStr ? parseBR(inicioStr) : new Date();
+  if (!atualDt) atualDt = new Date();
+
+  // 4. Calcula diferença (SEM tolerância)
+  const diffMs = atualDt.getTime() - previsao.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+
+  // Se diffMin for negativo (adiantado), retorna 0
   return diffMin > 0 ? diffMin : 0;
+}
+
+// Expor globalmente para uso no admin.js e outros módulos
+if (typeof window !== 'undefined') {
+  window.calculateDelayInMinutes = calculateDelayInMinutes;
 }
 
 export function formatMinutesToHHMM(mins) {
@@ -91,9 +164,7 @@ export function formatMinutesToHHMM(mins) {
   return `${hh}:${mm}`;
 }
 
-// -----------------------------
 // PWA
-// -----------------------------
 export function registerPWA() {
   try {
     if (!document.querySelector('link[rel="manifest"]')) {
@@ -112,9 +183,7 @@ export function registerPWA() {
   }
 }
 
-// -----------------------------
 // Corpo de e-mail (texto)
-// -----------------------------
 export function buildAlertEmailBody(ops, clienteNome = "Cliente") {
   const atrasadas = Array.isArray(ops)
     ? ops.filter((o) => (calculateDelayInMinutes(o) || 0) > 0)
@@ -156,12 +225,10 @@ export function buildAlertEmailBody(ops, clienteNome = "Cliente") {
 
   bodyLines.push("=".repeat(80), "", "Agradecemos a compreensão.", "", "Atenciosamente,", "Customer Service / Mercosul Line");
 
-  return { subject: `⚠ Alerta de Atraso - ${clienteNome}`, body: bodyLines.join("\n") };
+  return { subject: `⚠️ Alerta de Atraso - ${clienteNome}`, body: bodyLines.join("\n") };
 }
 
-// -----------------------------
 // Criação de arquivo EML (HTML + Texto)
-// -----------------------------
 export function createEMLFile(
   ops,
   clienteNome = "Cliente",
@@ -201,7 +268,7 @@ export function createEMLFile(
 
   atrasadas.forEach((op) => {
     const atrasoMin = calculateDelayInMinutes(op) || 0;
-    const container = op.Container || op.containers || op.container || "—"; // <-- SINGULAR
+    const container = op.Container || op.containers || op.container || "—";
     const motivo = op.JustificativaAtraso || op.motivo_atraso || "Não informado";
     const embarcador = op.Cliente || op.embarcador_nome || clienteNome;
     const porto = op.PortoOperacao || op.porto_operacao || "—";
@@ -263,3 +330,6 @@ export function downloadEML(emlContent, filename = "alerta-atrasos.eml") {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// Mantém compatibilidade com código antigo
+export const calculateDelayInMinutes_programacao = calculateDelayInMinutes;

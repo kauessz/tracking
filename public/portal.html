@@ -141,7 +141,7 @@
     <div class="glass-card p-6 mb-6">
       <h2 class="text-2xl font-bold text-gray-900 mb-6">Minhas Operações</h2>
       
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div>
           <label class="block text-sm font-semibold mb-2">Status</label>
           <select id="filter-status" class="w-full input-modern border border-gray-300 p-3">
@@ -161,6 +161,13 @@
             <option value="90d">90 dias</option>
             <option value="all">Tudo</option>
           </select>
+        </div>
+        
+        <!-- ✅ NOVO: Filtro por data específica -->
+        <div>
+          <label class="block text-sm font-semibold mb-2">Data Específica</label>
+          <input id="filter-date" type="date" 
+            class="w-full input-modern border border-gray-300 p-3" />
         </div>
         
         <div>

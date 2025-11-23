@@ -376,19 +376,45 @@ export const Parse = {
 };
 
 // ============================================
-// CÁLCULO DE ATRASOS
+// CÁLCULO DE ATRASOS - CORRIGIDO FINAL
 // ============================================
 
 export const Delay = {
-  // Calcula atraso em minutos
+  // ✅ CORREÇÃO FINAL: Operações finalizadas contabilizam atraso
   calculateMinutes(operation) {
+    // Verifica se está cancelada
+    const situacao = (operation.SituacaoProgramacao || '').toString().toLowerCase();
+    if (situacao.includes('cancelad')) return 0;
+
     const scheduled = Parse.dateAuto(
       operation.DataProgramada ?? 
       operation.previsao_inicio_atendimento
     );
     
     if (!scheduled) return 0;
+
+    // Verifica se já finalizou
+    const finished = Parse.dateAuto(
+      operation.DataSaida || 
+      operation['Dt FIM da Execução (BRA)'] || 
+      operation['Dt Fim da Execucao (BRA)'] ||
+      operation.dt_fim_execucao
+    );
+
+    // ✅ Se finalizou, calcula atraso baseado em quando CHEGOU
+    if (finished) {
+      const actual = Parse.dateAuto(
+        operation.DataChegada ?? 
+        operation.dt_inicio_execucao
+      );
+      if (!actual) return 0;
+      
+      const diffMs = actual.getTime() - scheduled.getTime();
+      const diffMin = Math.round(diffMs / 60000);
+      return diffMin > 0 ? diffMin : 0;
+    }
     
+    // Se em execução ou aguardando, usa chegada ou agora
     const actual = Parse.dateAuto(
       operation.DataChegada ?? 
       operation.dt_inicio_execucao

@@ -8,6 +8,9 @@
 // 5. Aba de Ocorrências integrada ao backend
 // 6. Fluxo de aprovação de usuários com tipo de conta e embarcador
 //
+
+console.log("🚀 admin.js - INÍCIO DO CARREGAMENTO");
+
 // ------------------------------------------------------
 // IMPORTS FIREBASE (CDN modular)
 // ------------------------------------------------------
@@ -22,12 +25,19 @@ import {
 // IMPORTS ADICIONAIS
 // ------------------------------------------------------
 import { Toast, Loading, Parse, Format } from "./utilities.js";
-import { APP_CONFIG } from "./config.js";
+import { APP_CONFIG, getApiUrl } from "./config.js";
+import {
+  initAnalytics,
+  carregarEmbarcadoresAnalytics,
+  buscarAnalytics,
+  setAuthTokenGetter,
+} from "./analytics.js";
+import { calculateDelayInMinutes } from "./utils.js";
 
 // ------------------------------------------------------
 // CONFIG
 // ------------------------------------------------------
-const API_BASE = APP_CONFIG?.API_BASE ?? "http://localhost:8080"; // usa config.js com fallback
+const API_BASE = getApiUrl(); // ✅ CORRIGIDO: usar getApiUrl()
 const firebaseConfig = JSON.parse(__firebase_config);
 
 const app = initializeApp(firebaseConfig);
@@ -231,20 +241,6 @@ function formatDateForDisplay(val) {
   return val;
 }
 
-// atraso em minutos = Execução (ou agora) - Programado
-// <=0 => on time ; >0 => atraso
-function calculateDelayInMinutes(op) {
-  const prog = parseDateBR(op.DataProgramada);
-  if (!prog) return 0;
-
-  const execStart = parseDateBR(op.DataChegada) || null;
-  const ref = execStart || new Date();
-
-  const diffMs = ref.getTime() - prog.getTime();
-  const diffMin = Math.round(diffMs / 60000);
-  return diffMin;
-}
-
 function formatMinutesToHHMM(mins) {
   const positive = mins < 0 ? 0 : mins;
   const h = Math.floor(positive / 60);
@@ -327,16 +323,24 @@ function normalizeOp(raw) {
   const porto = raw.porto_operacao || raw.PortoOperacao || "";
   const container = raw.container || raw.Container || raw.containers || "";
 
+  // ✅ Normaliza datas para formato BR
   const progIso =
     raw.previsao_inicio_atendimento || raw.previsao_inicio || raw.DataProgramada || "";
-  const execIso = raw.dt_inicio_execucao || raw.DataChegada || "";
+  const progRecalcIso =
+    raw.dt_previsao_entrega_recalculada || raw.DataProgramadaRecalculada || "";
+  const execInicioIso = raw.dt_inicio_execucao || raw.DataChegada || "";
+  const execFimIso = raw.dt_fim_execucao || raw.DataFim || "";
 
   const progFmt =
     progIso && typeof progIso === "string" && progIso.includes("T") ? isoToBR(progIso) : progIso;
-  const execFmt =
-    execIso && typeof execIso === "string" && execIso.includes("T") ? isoToBR(execIso) : execIso;
+  const progRecalcFmt =
+    progRecalcIso && typeof progRecalcIso === "string" && progRecalcIso.includes("T") ? isoToBR(progRecalcIso) : progRecalcIso;
+  const execInicioFmt =
+    execInicioIso && typeof execInicioIso === "string" && execInicioIso.includes("T") ? isoToBR(execInicioIso) : execInicioIso;
+  const execFimFmt =
+    execFimIso && typeof execFimIso === "string" && execFimIso.includes("T") ? isoToBR(execFimIso) : execFimIso;
 
-  // ✅ CORREÇÃO 3: Trata motivo vazio/nulo como "sem justificativa" (lowercase unificado)
+  // ✅ Trata motivo vazio/nulo como "sem justificativa"
   let atrasoMotivo = raw.motivo_atraso || raw.justificativa_atraso || raw.JustificativaAtraso || "";
   atrasoMotivo = (atrasoMotivo || "").trim().toLowerCase();
   if (!atrasoMotivo || atrasoMotivo === "-") {
@@ -345,21 +349,50 @@ function normalizeOp(raw) {
 
   const tipoProgRaw = raw.tipo_programacao || raw.TipoOperacao || raw.status_operacao || "";
 
+  // ✅ ADICIONAR campos necessários para calculateDelayInMinutes
+  const situacao = raw.SituacaoProgramacao || raw.situacao || raw.status || "";
+
   return {
     Booking: booking,
     Container: container,
     Cliente: embarcador,
     PortoOperacao: porto,
     DataProgramada: progFmt,
-    DataChegada: execFmt,
+    DataProgramadaRecalculada: progRecalcFmt, // ✅ IMPORTANTE para prioridade
+    DataChegada: execInicioFmt,
+    DataFim: execFimFmt,
     JustificativaAtraso: atrasoMotivo,
     TipoOperacao: tipoProgRaw,
+    SituacaoProgramacao: situacao, // ✅ ADICIONAR para detectar cancelamento
+
+    // ✅ Mantém campos originais para compatibilidade com utils.js
+    previsao_inicio_atendimento: progFmt,
+    dt_previsao_entrega_recalculada: progRecalcFmt,
+    dt_inicio_execucao: execInicioFmt,
+    dt_fim_execucao: execFimFmt,
+    porto_operacao: porto,
+    situacao: situacao,
   };
 }
 
+// ✅ CORREÇÃO: Filtra operações canceladas durante normalização
 function normalizeOpsArray(arr) {
   if (!Array.isArray(arr)) return [];
-  return arr.map(normalizeOp);
+  
+  return arr
+    .filter(raw => {
+      // ✅ CORREÇÃO: Não renderiza operações canceladas
+      const situacao = raw.SituacaoProgramacao || raw.situacao || raw.status || 
+                      raw.status_operacao || raw.TipoOperacao || "";
+      const isCanceled = /cancel/i.test(situacao);
+      
+      if (isCanceled) {
+        console.log(`⚠️ Operação cancelada filtrada: ${raw.booking || raw.Booking}`);
+      }
+      
+      return !isCanceled;
+    })
+    .map(normalizeOp);
 }
 
 // ------------------------------------------------------
@@ -371,9 +404,12 @@ function opMatchesFilters(op) {
   }
 
   const delayMin = calculateDelayInMinutes(op);
+  // ✅ Lógica corrigida: calculateDelayInMinutes sempre retorna >= 0
+  // 0 = no prazo (ou sem dados), >0 = atrasado
   const isLate = delayMin > 0;
-  const isOnTime = delayMin <= 0;
-  const isCanceled = /cancel/i.test(op.TipoOperacao || "");
+  const isOnTime = delayMin === 0 && op.DataProgramada;
+  const isCanceled = /cancel/i.test(op.TipoOperacao || "") ||
+    /cancel/i.test(op.SituacaoProgramacao || "");
 
   if (state.filters.status === "ontime" && !isOnTime) return false;
   if (state.filters.status === "late" && !isLate) return false;
@@ -430,7 +466,8 @@ function applyFiltersAndSort() {
 function buildKPIs(ops) {
   const total = ops.length;
   const delays = ops.map((o) => calculateDelayInMinutes(o));
-  const lateOnly = delays.filter((m) => m > 0);
+  // ✅ Atrasado = delay > 0 (positivo)
+  const lateOnly = delays.filter((m) => m !== null && m > 0);
   const lateCount = lateOnly.length;
   const pctLate = total > 0 ? (lateCount / total) * 100 : 0;
   return { total, lateCount, pctLate };
@@ -453,9 +490,11 @@ function groupDelayReasons(ops, topN = 5) {
   const counts = {};
   for (const o of ops) {
     const dmin = calculateDelayInMinutes(o);
+    
+    // ✅ CORREÇÃO: Só conta se estiver ATRASADA (delay > 0)
     if (dmin <= 0) continue;
 
-    // ✅ CORREÇÃO 3: Garante que exibe "sem justificativa" (lowercase)
+    // ✅ Garante que exibe "sem justificativa" (lowercase)
     let reason = (o.JustificativaAtraso || "").trim().toLowerCase();
     if (!reason || reason === "-") {
       reason = "sem justificativa";
@@ -473,7 +512,17 @@ function groupDelayReasons(ops, topN = 5) {
 // ------------------------------------------------------
 function renderTimelineHTML(op) {
   const delayMin = calculateDelayInMinutes(op);
-  const atrasoFmt = delayMin > 0 ? formatMinutesToHHMM(delayMin) : "ON TIME";
+  let atrasoFmt, atrasoColor;
+  if (delayMin === null) {
+    atrasoFmt = "Aguardando";
+    atrasoColor = "text-gray-500 italic";
+  } else if (delayMin === 0) {
+    atrasoFmt = "ON TIME";
+    atrasoColor = "text-green-600 font-bold";
+  } else {
+    atrasoFmt = formatMinutesToHHMM(delayMin);
+    atrasoColor = "text-red-600 font-bold";
+  }
 
   const steps = [
     { title: "Programado", time: op.DataProgramada || "—", color: "bg-blue-600" },
@@ -498,27 +547,25 @@ function renderTimelineHTML(op) {
         <div><span class="font-semibold">Prev. Início:</span> ${formatDateForDisplay(op.DataProgramada)}</div>
         <div><span class="font-semibold">Início Exec.:</span> ${formatDateForDisplay(op.DataChegada)}</div>
         <div><span class="font-semibold">Atraso:</span>
-          ${
-            delayMin > 0
-              ? `<span class="text-red-600 font-semibold">${atrasoFmt}</span>`
-              : `<span class="text-green-700 font-semibold uppercase">${atrasoFmt}</span>`
-          }
+          ${delayMin > 0
+      ? `<span class="text-red-600 font-semibold">${atrasoFmt}</span>`
+      : `<span class="text-green-700 font-semibold uppercase">${atrasoFmt}</span>`
+    }
         </div>
         <div><span class="font-semibold">Tipo de Operação:</span> ${op.TipoOperacao || "-"}</div>
       </div>
-      ${
-        motivo && motivo !== "sem justificativa"
-          ? `
+      ${motivo && motivo !== "sem justificativa"
+      ? `
         <div class="mt-2 text-[12px] text-gray-700">
           <span class="font-semibold">Motivo do Atraso:</span>
           ${op.JustificativaAtraso}
         </div>`
-          : ""
-      }
+      : ""
+    }
       <div class="flex flex-col gap-4 text-[12px] mt-4">
         ${steps
-          .map(
-            (s) => `
+      .map(
+        (s) => `
           <div class="flex items-start gap-3">
             <div class="tl-step-dot ${s.color}"></div>
             <div>
@@ -526,8 +573,8 @@ function renderTimelineHTML(op) {
               <div class="text-gray-600">${s.time}</div>
             </div>
           </div>`
-          )
-          .join("")}
+      )
+      .join("")}
       </div>
     </div>
   `;
@@ -557,34 +604,32 @@ function renderOpsTable() {
   const html = opsToRender
     .map((op) => {
       const delayMin = calculateDelayInMinutes(op);
-      const atrasoText = delayMin > 0 ? formatMinutesToHHMM(delayMin) : "ON TIME";
+      let atrasoText;
+      if (delayMin < 0) atrasoText = "ON TIME";
+      else if (delayMin === 0) atrasoText = "ON TIME";
+      else atrasoText = formatMinutesToHHMM(delayMin);
       const isLate = delayMin > 0;
 
       const rowId = `row-${op.Booking}-${Math.random().toString(36).substr(2, 9)}`;
       const isExpanded = state.expandedBooking === op.Booking;
 
       let rowHtml = `
-      <tr id="${rowId}" class="hover:bg-gray-50 cursor-pointer transition-colors" data-booking="${
-        op.Booking || ""
-      }">
+      <tr id="${rowId}" class="hover:bg-gray-50 cursor-pointer transition-colors" data-booking="${op.Booking || ""
+        }">
         <td class="px-6 py-3 font-medium text-gray-900 col-booking">${op.Booking || "—"}</td>
-        <td class="px-6 py-3 text-gray-700 col-shipper" title="${op.Cliente || ""}">${
-        op.Cliente || "—"
-      }</td>
-        <td class="px-6 py-3 text-gray-700 col-porto" title="${op.PortoOperacao || ""}">${
-        op.PortoOperacao || "—"
-      }</td>
+        <td class="px-6 py-3 text-gray-700 col-shipper" title="${op.Cliente || ""}">${op.Cliente || "—"
+        }</td>
+        <td class="px-6 py-3 text-gray-700 col-porto" title="${op.PortoOperacao || ""}">${op.PortoOperacao || "—"
+        }</td>
         <td class="px-6 py-3 text-gray-700 col-previsao">${formatDateForDisplay(
           op.DataProgramada
         )}</td>
         <td class="px-6 py-3 text-gray-700 col-exec">${formatDateForDisplay(
           op.DataChegada
         )}</td>
-        <td class="px-6 py-3 text-center col-atraso ${
-          isLate ? "text-red-600 font-bold" : "text-green-600"
+        <td class="px-6 py-3 text-center col-atraso ${isLate ? "text-red-600 font-bold" : "text-green-600"
         }">${atrasoText}</td>
-        <td class="px-6 py-3 text-gray-600 text-sm col-motivo" title="${
-          op.JustificativaAtraso || "Nenhum motivo informado"
+        <td class="px-6 py-3 text-gray-600 text-sm col-motivo" title="${op.JustificativaAtraso || "Nenhum motivo informado"
         }">${op.JustificativaAtraso}</td>
       </tr>`;
 
@@ -816,6 +861,7 @@ function wireKpiClicks() {
   }
 }
 
+
 // ------------------------------------------------------
 // E-MAIL
 // ------------------------------------------------------
@@ -823,7 +869,18 @@ function buildEmailTableHTML(lateOps) {
   const rowsHtml = lateOps
     .map((op) => {
       const delayMin = calculateDelayInMinutes(op);
-      const atrasoFmt = delayMin > 0 ? formatMinutesToHHMM(delayMin) : "ON TIME";
+      let atrasoFmt, atrasoColor;
+      if (delayMin < 0) {
+        // Programado para o futuro
+        atrasoFmt = "Programado";
+        atrasoColor = "text-blue-500 font-medium";
+      } else if (delayMin === 0) {
+        atrasoFmt = "ON TIME";
+        atrasoColor = "text-green-600 font-bold";
+      } else {
+        atrasoFmt = formatMinutesToHHMM(delayMin);
+        atrasoColor = "text-red-600 font-bold";
+      }
       return `
         <tr>
           <td>${op.Booking || "-"}</td>
@@ -1206,15 +1263,13 @@ async function handleFileChosen(e) {
       data.processed ?? (data.inserted || 0) + (data.updated || 0) + (data.skipped || 0);
 
     Toast?.success?.(
-      `✅ Importação concluída!\n${data.inserted || 0} inseridos • ${
-        data.updated || 0
+      `✅ Importação concluída!\n${data.inserted || 0} inseridos • ${data.updated || 0
       } atualizados • ${data.skipped || 0} ignorados`,
       6000
     );
 
     setStatus(
-      `Importação OK: ${processed} processados (${data.inserted || 0} inseridos, ${
-        data.updated || 0
+      `Importação OK: ${processed} processados (${data.inserted || 0} inseridos, ${data.updated || 0
       } atualizados, ${data.skipped || 0} ignorados)`
     );
 
@@ -1237,38 +1292,124 @@ async function handleFileChosen(e) {
  * Normaliza um registro da planilha para o formato esperado pelo backend
  */
 function normalizeRecord(row, idx) {
+  // ✅ CORREÇÃO: Adicionar campo NumeroProgramacao
+  const numeroProgramacao =
+    row["Número da programação"] ||
+    row.NumeroProgramacao ||
+    row.numero_programacao ||
+    null;
+
   const booking = row.Booking || row.booking || row.BOOKING || null;
-  const cliente = row.Cliente || row.cliente || row.Embarcador || row.embarcador || null;
-  const container = row.Container || row.container || row.containers || null;
+
+  const cliente =
+    row.Embarcador ||
+    row["Nome do Embarcador"] ||
+    row.Cliente ||
+    row.cliente ||
+    row.embarcador ||
+    null;
+
+  const container =
+    row.Containers ||
+    row.Container ||
+    row.container ||
+    row.containers ||
+    null;
+
   const tipoOp =
+    row["Tipo de programação"] ||
     row["Tipo Operação"] ||
     row.TipoOperacao ||
     row.tipo_programacao ||
     row.TipoProgramacao ||
     null;
-  const porto =
-    row["Porto Operação"] || row.PortoOperacao || row.porto_operacao || null;
+
+  // ✅ POL e POD separados
+  const pol = row.POL || row.pol || null;
+  const pod = row.POD || row.pod || null;
+
   let justificativa =
+    row["Justificativa de atraso de programação"] ||
     row["Justificativa Atraso"] ||
     row.JustificativaAtraso ||
     row.justificativa_atraso ||
     null;
 
-  // ✅ CORREÇÃO 3: Normaliza justificativa vazia
   if (!justificativa || justificativa.trim() === "" || justificativa.trim() === "-") {
     justificativa = "sem justificativa";
   } else {
     justificativa = justificativa.trim();
   }
 
+  // ✅ Motivo de atraso
+  let motivoAtraso =
+    row["Tipo de ocorrência"] ||
+    row.MotivoAtraso ||
+    row.motivo_atraso ||
+    null;
+
+  // ✅ Status da operação
+  const statusOperacao =
+    row["Situação programação"] ||
+    row.StatusOperacao ||
+    row.status_operacao ||
+    "Programado";
+
+  // ✅ Datas adicionais
   let dataProgramada =
+    row["Previsão início atendimento (BRA)"] ||
     row["Data Programada"] ||
     row.DataProgramada ||
     row.previsao_inicio_atendimento ||
     null;
-  let dataChegada =
-    row["Data Chegada"] || row.DataChegada || row.dt_inicio_execucao || null;
 
+  let dataInicioExec =
+    row["Dt Início da Execução (BRA)"] ||
+    row["Data Chegada"] ||
+    row.DataChegada ||
+    row.dt_inicio_execucao ||
+    null;
+
+  let dataFimExec =
+    row["Dt FIM da Execução (BRA)"] ||
+    row["Data Fim"] ||
+    row.DataFim ||
+    row.dt_fim_execucao ||
+    null;
+
+  let dataEntregaRecalc =
+    row["Data de previsão de entrega recalculada (BRA)"] ||
+    row["Data Entrega Recalculada"] ||
+    row.DataEntregaRecalculada ||
+    row.dt_previsao_entrega_recalculada ||
+    null;
+
+  // ✅ Informações do motorista e veículos
+  const nomeMotorista =
+    row["Nome do motorista programado"] ||
+    row.NomeMotorista ||
+    row.nome_motorista ||
+    null;
+
+  const cpfMotorista =
+    row["CPF motorista programado"] ||
+    row.CPFMotorista ||
+    row.cpf_motorista ||
+    null;
+
+  const placaVeiculo =
+    row["Placa do veículo"] ||
+    row.PlacaVeiculo ||
+    row.placa_veiculo ||
+    null;
+
+  const placaCarreta =
+    row["Placa da carreta 1"] ||
+    row.PlacaCarreta ||
+    row.placa_carreta ||
+    null;
+
+  // Parse das datas
   if (dataProgramada) {
     const parsed = Parse?.dateAuto?.(dataProgramada);
     if (parsed) {
@@ -1279,29 +1420,60 @@ function normalizeRecord(row, idx) {
     }
   }
 
-  if (dataChegada) {
-    const parsed = Parse?.dateAuto?.(dataChegada);
+  if (dataInicioExec) {
+    const parsed = Parse?.dateAuto?.(dataInicioExec);
     if (parsed) {
-      dataChegada = Format?.dateTime?.(parsed) || dataChegada;
+      dataInicioExec = Format?.dateTime?.(parsed) || dataInicioExec;
     } else {
-      console.warn(`Linha ${idx + 1}: Data Chegada inválida:`, dataChegada);
-      dataChegada = null;
+      console.warn(`Linha ${idx + 1}: Data Início Execução inválida:`, dataInicioExec);
+      dataInicioExec = null;
     }
   }
 
-  if (!booking) {
-    throw new Error(`Linha ${idx + 1}: Booking ausente`);
+  if (dataFimExec) {
+    const parsed = Parse?.dateAuto?.(dataFimExec);
+    if (parsed) {
+      dataFimExec = Format?.dateTime?.(parsed) || dataFimExec;
+    } else {
+      console.warn(`Linha ${idx + 1}: Data Fim Execução inválida:`, dataFimExec);
+      dataFimExec = null;
+    }
+  }
+
+  if (dataEntregaRecalc) {
+    const parsed = Parse?.dateAuto?.(dataEntregaRecalc);
+    if (parsed) {
+      dataEntregaRecalc = Format?.dateTime?.(parsed) || dataEntregaRecalc;
+    } else {
+      console.warn(`Linha ${idx + 1}: Data Entrega Recalculada inválida:`, dataEntregaRecalc);
+      dataEntregaRecalc = null;
+    }
+  }
+
+  // ✅ VALIDAÇÃO: Campos obrigatórios
+  if (!numeroProgramacao || !booking) {
+    throw new Error(`Linha ${idx + 1}: Número da programação ou Booking ausente`);
   }
 
   return {
+    NumeroProgramacao: numeroProgramacao,
     Booking: booking,
     Cliente: cliente,
     Container: container,
     TipoOperacao: tipoOp,
-    PortoOperacao: porto,
+    POL: pol,
+    POD: pod,
     DataProgramada: dataProgramada,
-    DataChegada: dataChegada,
+    DataChegada: dataInicioExec,
+    DataFim: dataFimExec,
+    DataEntregaRecalculada: dataEntregaRecalc,
     JustificativaAtraso: justificativa.toLowerCase(),
+    MotivoAtraso: motivoAtraso,
+    StatusOperacao: statusOperacao,
+    NomeMotorista: nomeMotorista,
+    CPFMotorista: cpfMotorista,
+    PlacaVeiculo: placaVeiculo,
+    PlacaCarreta: placaCarreta,
   };
 }
 
@@ -1350,7 +1522,8 @@ async function renderPendingUsers() {
     });
     const data = await resp.json();
     if (data.success) {
-      embarcadores = data.embarcadores || [];
+      embarcadores = data.items || [];
+      console.log("✅ Embarcadores carregados:", embarcadores.length);
     }
   } catch (err) {
     console.warn("Erro ao carregar embarcadores:", err);
@@ -1358,27 +1531,15 @@ async function renderPendingUsers() {
 
   pendingUsersTbody.innerHTML = state.pendingUsers
     .map((u) => {
-      const tipoLabel =
-        u.tipo_conta === "internal" ? "Funcionário" : "Cliente/Embarcador";
-      const tipoColor =
-        u.tipo_conta === "internal"
-          ? "bg-blue-100 text-blue-700"
-          : "bg-green-100 text-green-700";
-
-      // ✅ Select de embarcadores (só aparece se tipo for 'shipper')
-      const embarcadorSelect =
-        u.tipo_conta === "shipper"
-          ? `
-        <select class="embarcador-select border border-gray-300 rounded-lg px-2 py-1 text-sm" data-user-id="${
-          u.id
-        }">
-          <option value="">Selecione...</option>
+      // ✅ SEMPRE mostrar select de embarcadores para usuários não-admin
+      const embarcadorSelect = `
+        <select class="embarcador-select border border-gray-300 rounded-lg px-2 py-1 text-sm w-full" data-user-id="${u.id}">
+          <option value="">Selecione uma empresa...</option>
           ${embarcadores
-            .map((emb) => `<option value="${emb.id}">${emb.nome}</option>`)
-            .join("")}
+          .map((emb) => `<option value="${emb.id}">${emb.nome_principal || emb.nome || 'Sem nome'}</option>`)
+          .join("")}
         </select>
-      `
-          : '<span class="text-gray-400 text-xs">N/A</span>';
+      `;
 
       return `
         <tr class="hover:bg-gray-50">
@@ -1387,8 +1548,8 @@ async function renderPendingUsers() {
           <td class="px-6 py-3 text-gray-700">${u.telefone || "N/A"}</td>
           <td class="px-6 py-3 text-gray-700">${u.cpf || "N/A"}</td>
           <td class="px-6 py-3">
-            <span class="px-2 py-1 rounded-full text-xs font-semibold ${tipoColor}">
-              ${tipoLabel}
+            <span class="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">
+              Pendente
             </span>
           </td>
           <td class="px-6 py-3">
@@ -1396,14 +1557,10 @@ async function renderPendingUsers() {
           </td>
           <td class="px-6 py-3">
             <div class="flex gap-2">
-              <button class="approve-user bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" data-id="${
-                u.id
-              }">
+              <button class="approve-user bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" data-id="${u.id}">
                 ✓ Aprovar
               </button>
-              <button class="reject-user bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" data-id="${
-                u.id
-              }">
+              <button class="reject-user bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" data-id="${u.id}">
                 ✗ Rejeitar
               </button>
             </div>
@@ -1436,10 +1593,9 @@ async function approveUser(id) {
       return;
     }
 
+    // ✅ Por padrão, usuários são 'embarcador' a menos que seja explicitamente admin
     const asAdmin = confirm(
-      `Aprovar "${pend.nome}" como ADMIN?\n\nOK = ADMIN\nCancelar = ${
-        pend.tipo_conta === "internal" ? "Funcionário" : "Cliente/Embarcador"
-      }`
+      `Aprovar "${pend.nome}" como ADMIN?\n\nOK = ADMIN\nCancelar = Cliente/Embarcador`
     );
 
     let body = { id };
@@ -1447,23 +1603,19 @@ async function approveUser(id) {
     if (asAdmin) {
       body.role = "admin";
     } else {
-      // ✅ Se não for admin, pegar o embarcador_id do select
-      if (pend.tipo_conta === "shipper") {
-        const selectEl = document.querySelector(
-          `.embarcador-select[data-user-id="${id}"]`
-        );
-        const embarcadorId = selectEl?.value;
+      // ✅ SEMPRE pegar o embarcador_id do select para usuários não-admin
+      const selectEl = document.querySelector(
+        `.embarcador-select[data-user-id="${id}"]`
+      );
+      const embarcadorId = selectEl?.value;
 
-        if (!embarcadorId) {
-          alert("Por favor, selecione uma empresa/embarcador antes de aprovar.");
-          return;
-        }
-
-        body.role = "embarcador";
-        body.embarcador_id = parseInt(embarcadorId);
-      } else {
-        body.role = "funcionario";
+      if (!embarcadorId) {
+        alert("Por favor, selecione uma empresa/embarcador antes de aprovar.");
+        return;
       }
+
+      body.role = "embarcador";
+      body.embarcador_id = parseInt(embarcadorId);
     }
 
     const resp = await fetch(`${API_BASE}/admin/approveUser`, {
@@ -1478,7 +1630,7 @@ async function approveUser(id) {
     const out = await resp.json();
 
     if (!out.success) {
-      alert("Erro ao aprovar usuário: " + (out.error || "desconhecido"));
+      alert("Erro ao aprovar usuário: " + (out.error || out.message || "desconhecido"));
     } else {
       alert("Usuário aprovado com sucesso!");
       await fetchPendingUsers();
@@ -1511,39 +1663,53 @@ async function rejectUser(id) {
 }
 
 // ------------------------------------------------------
-// GESTÃO DE OCORRÊNCIAS
+// ✅ OCORRÊNCIAS
 // ------------------------------------------------------
+function wireOcorrenciasActions() {
+  if (ocorrenciasSearchBtn) {
+    ocorrenciasSearchBtn.addEventListener('click', () => {
+      loadOcorrencias();
+    });
+  }
+}
+
 async function loadOcorrencias() {
   try {
-    const booking = state.ocorrenciasFilter.booking;
-    const tipo = state.ocorrenciasFilter.tipo;
+    const booking = ocorrenciasFilterBooking?.value?.trim() || '';
+    const tipo = ocorrenciasFilterTipo?.value || '';
 
-    let url = `${API_BASE}/admin/ocorrencias/list`;
-    const params = new URLSearchParams();
-
-    if (booking) params.append("booking", booking);
-    if (tipo) params.append("tipo", tipo);
-
-    if (params.toString()) {
-      url += "?" + params.toString();
-    }
+    let url = `${API_BASE}/admin/ocorrencias?status=all`;
 
     const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${authToken}` },
+      headers: { Authorization: `Bearer ${authToken}` }
     });
 
     const data = await resp.json();
 
-    if (data.success) {
-      state.ocorrencias = data.ocorrencias || [];
-      renderOcorrencias();
-    } else {
-      console.error("Erro ao carregar ocorrências:", data);
+    if (!data.success) {
+      console.error('Erro ao carregar ocorrências:', data);
       state.ocorrencias = [];
       renderOcorrencias();
+      return;
     }
+
+    let ocorrencias = data.items || [];
+
+    // Filtrar localmente
+    if (booking) {
+      ocorrencias = ocorrencias.filter(o =>
+        o.booking?.toLowerCase().includes(booking.toLowerCase())
+      );
+    }
+
+    if (tipo) {
+      ocorrencias = ocorrencias.filter(o => o.tipo_ocorrencia === tipo);
+    }
+
+    state.ocorrencias = ocorrencias;
+    renderOcorrencias();
   } catch (err) {
-    console.error("Erro loadOcorrencias:", err);
+    console.error('Erro loadOcorrencias:', err);
     state.ocorrencias = [];
     renderOcorrencias();
   }
@@ -1554,97 +1720,289 @@ function renderOcorrencias() {
 
   if (state.ocorrencias.length === 0) {
     ocorrenciasList.innerHTML = `
-      <p class="text-gray-500 text-center py-8">
+      <div class="text-center py-8 text-gray-500">
         Nenhuma ocorrência encontrada. Use os filtros acima para buscar.
-      </p>
+      </div>
     `;
     return;
   }
 
+  const tiposOcorrencia = {
+    'atraso': '⏰ Atraso',
+    'cancelamento': '🚫 Cancelamento',
+    'mudanca_programacao': '📅 Mudança',
+    'documentacao': '📄 Documentação',
+    'equipamento': '🔧 Equipamento',
+    'outros': '📝 Outros'
+  };
+
+  const statusLabels = {
+    'pendente': { label: 'Pendente', class: 'bg-yellow-100 text-yellow-700' },
+    'em_analise': { label: 'Em Análise', class: 'bg-blue-100 text-blue-700' },
+    'cliente_notificado': { label: 'Cliente Notificado', class: 'bg-purple-100 text-purple-700' },
+    'processada': { label: 'Processada', class: 'bg-green-100 text-green-700' },
+    'rejeitada': { label: 'Rejeitada', class: 'bg-red-100 text-red-700' }
+  };
+
   const html = state.ocorrencias
     .map((occ) => {
-      const tipoIcons = {
-        inicio_operacao: "🚀",
-        fim_operacao: "✅",
-        atraso: "⏰",
-        problema_operacional: "⚠️",
-        observacao: "📝",
-      };
-
-      const tipoLabels = {
-        inicio_operacao: "Início de Operação",
-        fim_operacao: "Fim de Operação",
-        atraso: "Atraso",
-        problema_operacional: "Problema Operacional",
-        observacao: "Observação",
-      };
-
-      const icon = tipoIcons[occ.tipo] || "📋";
-      const tipoLabel = tipoLabels[occ.tipo] || occ.tipo;
-      const data = new Date(occ.data_registro).toLocaleString("pt-BR");
+      const tipo = tiposOcorrencia[occ.tipo_ocorrencia] || occ.tipo_ocorrencia;
+      const statusInfo = statusLabels[occ.status] || { label: occ.status, class: 'bg-gray-100 text-gray-700' };
+      const dataRegistro = occ.data_criacao ? new Date(occ.data_criacao).toLocaleString('pt-BR') : 'N/A';
 
       return `
-      <div class="glass-card p-4 border-l-4 ${
-        occ.tipo === "atraso" || occ.tipo === "problema_operacional"
-          ? "border-red-500"
-          : "border-blue-500"
-      }">
-        <div class="flex items-start justify-between mb-2">
-          <div class="flex items-center gap-2">
-            <span class="text-2xl">${icon}</span>
-            <div>
-              <h3 class="font-bold text-gray-900">${tipoLabel}</h3>
-              <p class="text-xs text-gray-500">${data}</p>
-            </div>
+      <div class="bg-white rounded-lg shadow-md p-6 border border-gray-200 hover:shadow-lg transition-all">
+        <div class="flex justify-between items-start mb-4">
+          <div>
+            <h3 class="text-lg font-bold text-purple-700">📦 ${occ.booking}</h3>
+            <p class="text-sm text-gray-600">${occ.embarcador_nome || 'N/A'}</p>
           </div>
-          <span class="text-xs font-semibold px-3 py-1 rounded-full ${
-            occ.tipo === "atraso" || occ.tipo === "problema_operacional"
-              ? "bg-red-100 text-red-700"
-              : "bg-blue-100 text-blue-700"
-          }">
-            ${tipoLabel}
+          <span class="px-3 py-1 rounded-full text-xs font-semibold ${statusInfo.class}">
+            ${statusInfo.label}
           </span>
         </div>
-        
-        <div class="grid grid-cols-2 gap-4 text-sm mb-3">
-          <div>
-            <span class="font-semibold text-gray-700">Booking:</span>
-            <span class="text-gray-900">${occ.booking || "N/A"}</span>
-          </div>
-          <div>
-            <span class="font-semibold text-gray-700">Container:</span>
-            <span class="text-gray-900">${occ.container || "N/A"}</span>
-          </div>
+
+        <div class="space-y-2 text-sm mb-4">
+          <p><strong>Tipo:</strong> ${tipo}</p>
+          <p><strong>Container:</strong> ${occ.container || 'N/A'}</p>
+          <p><strong>Porto:</strong> ${occ.porto || 'N/A'}</p>
+          <p><strong>Data Registro:</strong> ${dataRegistro}</p>
+          <p><strong>Descrição:</strong> ${occ.descricao_ocorrencia || 'Sem descrição'}</p>
         </div>
-        
-        <div class="text-sm">
-          <span class="font-semibold text-gray-700">Descrição:</span>
-          <p class="text-gray-900 mt-1">${occ.descricao || ""}</p>
+
+        ${occ.status !== 'processada' ? `
+        <div class="flex flex-wrap gap-2 pt-4 border-t border-gray-200">
+          <button class="btn-ocorrencia-status bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" 
+                  data-id="${occ.id}" 
+                  data-status="processada">
+            ✅ Marcar como Tratada
+          </button>
+          <button class="btn-gerar-eml-individual bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" 
+                  data-booking="${occ.booking || ''}"
+                  data-container="${occ.container || ''}"
+                  data-tipo="${tipo}"
+                  data-descricao="${(occ.descricao_ocorrencia || '').replace(/"/g, '&quot;')}"
+                  data-porto="${occ.porto || ''}"
+                  data-data="${dataRegistro}"
+                  data-embarcador="${occ.embarcador_nome || ''}">
+            📧 Gerar EML
+          </button>
+          <button class="btn-ocorrencia-delete bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" 
+            data-id="${occ.id}">
+            🗑️ Excluir
+          </button>
         </div>
+        ` : `
+        <div class="flex gap-2 pt-4 border-t border-gray-200">
+          <button class="btn-gerar-eml-individual bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-semibold transition-all" 
+                  data-booking="${occ.booking || ''}"
+                  data-container="${occ.container || ''}"
+                  data-tipo="${tipo}"
+                  data-descricao="${(occ.descricao_ocorrencia || '').replace(/"/g, '&quot;')}"
+                  data-porto="${occ.porto || ''}"
+                  data-data="${dataRegistro}"
+                  data-embarcador="${occ.embarcador_nome || ''}">
+            📧 Gerar EML
+          </button>
+        </div>
+        `}
       </div>
     `;
     })
     .join("");
 
   ocorrenciasList.innerHTML = html;
+
+  // ✅ Adicionar event listeners nos botões
+  document.querySelectorAll('.btn-ocorrencia-status').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const newStatus = btn.dataset.status;
+      await updateOcorrenciaStatus(id, newStatus);
+    });
+  });
+
+  document.querySelectorAll('.btn-ocorrencia-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      await deleteOcorrencia(id);
+    });
+  });
+  // ✅ Event listeners para botões de gerar EML individual
+  document.querySelectorAll('.btn-gerar-eml-individual').forEach(btn => {
+    btn.addEventListener('click', () => {
+      try {
+        const booking = btn.dataset.booking || '';
+        const container = btn.dataset.container || '';
+        const tipo = btn.dataset.tipo || '';
+        const descricao = btn.dataset.descricao || '';
+        const porto = btn.dataset.porto || '';
+        const data = btn.dataset.data || '';
+        const embarcador = btn.dataset.embarcador || '';
+
+        let corpo = `Prezados(as),\n\nSegue informação sobre ocorrência registrada:\n\n`;
+        corpo += `${'='.repeat(80)}\n\n`;
+        corpo += `OCORRÊNCIA\n`;
+        corpo += `Booking: ${booking}\n`;
+        corpo += `Container: ${container}\n`;
+        corpo += `Embarcador: ${embarcador}\n`;
+        corpo += `Porto: ${porto}\n`;
+        corpo += `Tipo: ${tipo}\n`;
+        corpo += `Data Registro: ${data}\n`;
+        corpo += `Descrição: ${descricao}\n\n`;
+        corpo += `${'='.repeat(80)}\n\n`;
+        corpo += `Estamos trabalhando para resolver esta situação o mais breve possível.\n\n`;
+        corpo += `Atenciosamente,\nCustomer Service / Mercosul Line`;
+
+        const to = 'cliente@email.com';
+        const subject = `Ocorrência - Booking ${booking} - Mercosul Line`;
+        const eml = `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${corpo.replace(/\n/g, '\r\n')}`;
+
+        const blob = new Blob([eml], { type: 'message/rfc822' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ocorrencia-${booking}-${Date.now()}.eml`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2500);
+
+        Toast?.success?.('EML gerado com sucesso!');
+      } catch (e) {
+        console.error('Erro ao gerar EML:', e);
+        Toast?.error?.('Não foi possível gerar o EML: ' + e.message);
+      }
+    });
+  });
+
+}
+
+// ✅ CORREÇÃO: Função atualizada com endpoint correto
+async function updateOcorrenciaStatus(id, newStatus) {
+  try {
+    // ✅ CORRIGIDO: usar /admin/ocorrencias/updateStatus ao invés de /process
+    const resp = await fetch(`${API_BASE}/admin/ocorrencias/updateStatus`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({
+        id: parseInt(id),
+        status: newStatus
+      })
+    });
+
+    const data = await resp.json();
+
+    if (data.success) {
+      Toast?.success?.('Status atualizado com sucesso!');
+      await loadOcorrencias(); // Recarrega a lista
+    } else {
+      Toast?.error?.('Erro ao atualizar status: ' + (data.error || 'desconhecido'));
+    }
+  } catch (err) {
+    console.error('Erro updateOcorrenciaStatus:', err);
+    Toast?.error?.('Falha ao atualizar status');
+  }
+}
+
+async function deleteOcorrencia(id) {
+  try {
+    const confirmacao = confirm('Tem certeza que deseja excluir esta ocorrência?');
+    if (!confirmacao) return;
+
+    const resp = await fetch(`${API_BASE}/admin/ocorrencias/delete`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ id: parseInt(id) })
+    });
+
+    const data = await resp.json();
+
+    if (data.success) {
+      Toast?.success?.('Ocorrência excluída com sucesso!');
+      await loadOcorrencias(); // Recarrega a lista
+    } else {
+      Toast?.error?.('Erro ao excluir ocorrência: ' + (data.error || 'desconhecido'));
+    }
+  } catch (err) {
+    console.error('Erro deleteOcorrencia:', err);
+    Toast?.error?.('Falha ao excluir ocorrência');
+  }
 }
 
 // ------------------------------------------------------
-// FETCH DADOS DO BACKEND
+// ✅ CORREÇÃO: FETCH DADOS DO BACKEND COM PAGINAÇÃO SERVER-SIDE
+// 🔧 FIX: Agora busca TODAS as páginas necessárias
 // ------------------------------------------------------
 async function fetchAllOps() {
-  const resp = await fetch(`${API_BASE}/admin/allOps`, {
-    headers: { Authorization: `Bearer ${authToken}` },
-  });
-  const out = await resp.json();
-  if (!out.success) {
-    console.error("Erro /admin/allOps:", out);
+  try {
+    const pageSize = 1000; // Busca 1k por vez (limite do Supabase)
+    let allOperations = [];
+    let currentPage = 1;
+    let hasMorePages = true;
+
+    console.log("🔄 Iniciando carregamento de todas as operações...");
+
+    // Loop para buscar todas as páginas
+    while (hasMorePages) {
+      const resp = await fetch(`${API_BASE}/admin/allOps?page=${currentPage}&pageSize=${pageSize}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+
+      const out = await resp.json();
+
+      if (!out.success) {
+        console.error(`❌ Erro ao buscar página ${currentPage}:`, out);
+        break;
+      }
+
+      // Adiciona as operações da página atual
+      if (out.items && out.items.length > 0) {
+        allOperations = allOperations.concat(out.items);
+        console.log(`📄 Página ${currentPage}/${out.pagination?.totalPages || '?'} carregada: ${out.items.length} operações`);
+      }
+
+      // Verifica se há mais páginas
+      if (out.pagination) {
+        hasMorePages = out.pagination.hasNextPage;
+
+        // Log de progresso
+        if (currentPage === 1) {
+          console.log(`📊 Total de operações no banco: ${out.pagination.totalItems}`);
+          console.log(`📄 Total de páginas: ${out.pagination.totalPages}`);
+        }
+      } else {
+        hasMorePages = false;
+      }
+
+      currentPage++;
+
+      // Segurança: evita loop infinito (máximo 100 páginas)
+      if (currentPage > 100) {
+        console.warn("⚠️ Limite de 100 páginas atingido. Parando o carregamento.");
+        break;
+      }
+    }
+
+    // Normaliza e armazena todas as operações
+    state.allOps = normalizeOpsArray(allOperations);
+
+    console.log(`✅ Carregamento concluído: ${state.allOps.length} operações totais`);
+
+    populateEmbarcadorChoices();
+    applyFiltersAndSort();
+  } catch (error) {
+    console.error("❌ Erro fatal ao buscar operações:", error);
     state.allOps = [];
-  } else {
-    state.allOps = normalizeOpsArray(out.items || []);
+    populateEmbarcadorChoices();
+    applyFiltersAndSort();
   }
-  populateEmbarcadorChoices();
-  applyFiltersAndSort();
 }
 
 async function fetchPendingUsers() {
@@ -1675,51 +2033,172 @@ function wireLogout() {
 // ------------------------------------------------------
 // INIT AUTH + LOAD
 // ------------------------------------------------------
-onAuthStateChanged(auth, async (user) => {
+// ... (mantenha o código anterior do arquivo admin.js)
+
+// ------------------------------------------------------
+// INIT AUTH + LOAD
+// ------------------------------------------------------
+
+// ✅ CORREÇÃO PARA ERRO 401: Gerenciamento automático de Token
+import { onIdTokenChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+// Monitora alterações no token (login inicial e renovações automáticas)
+onIdTokenChanged(auth, async (user) => {
   if (!user) {
+    console.log("❌ Sem usuário, redirecionando...");
     window.location.href = "index.html";
     return;
   }
 
-  authToken = await user.getIdToken(true);
+  // Atualiza a variável global sempre que o Firebase renovar o token
+  authToken = await user.getIdToken();
+  console.log("🔑 Token atualizado/renovado com sucesso.");
 
+  // Se for a primeira carga (página acabou de abrir), executa a inicialização
+  // Verifica se já carregamos para evitar reload duplo em refresh de token
+  if (!window.appInitialized) {
+    window.appInitialized = true;
+    initApp(user);
+  }
+});
+
+async function initApp(user) {
   try {
+    // 1. Validação de Admin (Whoami)
     const who = await fetch(`${API_BASE}/auth/whoami`, {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     const whoJson = await who.json();
 
-    if (!whoJson.success || whoJson.user?.status !== "ativo") {
-      alert("Usuário sem acesso ativo.");
+    if (!whoJson.success || whoJson.user?.role !== "admin") {
+      alert("Acesso restrito a administradores.");
       window.location.href = "index.html";
       return;
     }
-    if (whoJson.user.role !== "admin") {
-      alert("Acesso restrito a administradores.");
-      window.location.href = "portal.html";
-      return;
+
+    // Atualiza Header com nome
+    const headerElement = document.querySelector('header .page-wrap h1');
+    if (headerElement) {
+      headerElement.innerHTML = `
+        🎯 Painel Administrativo
+        <span class="block text-sm font-normal opacity-90 mt-1">
+          ${whoJson.user.nome || user.email} <span class="opacity-75">(Admin)</span>
+        </span>
+      `;
     }
+
+    // 2. Carregamento de Dados
+    await fetchAllOps();
+    await fetchPendingUsers();
+    
+    // Carrega ocorrências se a função estiver disponível (no escopo global ou importada)
+    // Se loadOcorrencias foi definida dentro do admin.js anterior, chame-a aqui
+    if (typeof loadOcorrencias === 'function') await loadOcorrencias();
+
+    // 3. Inicialização de Módulos
+    console.log("📊 Inicializando módulo de Analytics...");
+    
+    // ✅ Passa uma função que sempre pega a variável authToken mais atual
+    setAuthTokenGetter(() => authToken); 
+    
+    await carregarEmbarcadoresAnalytics();
+    initAnalytics();
+    await buscarAnalytics(); // Carrega gráficos iniciais
+
+    console.log("🚂 Inicializando módulo de Ferrovia...");
+    import('./ferrovia.js').then(module => {
+      module.initFerrovia(API_BASE, () => authToken);
+      console.log("✅ Módulo Ferrovia inicializado");
+    });
+
+    initCharts();
+    wireKpiClicks();
+    wireFiltersAndActions();
+    wirePagination();
+    wireLogout();
+    wireOcorrenciasActions(); // Se essa função existir no seu admin.js
+
+    rerenderAll();
+    renderPendingUsers();
+
   } catch (err) {
-    console.error("Erro whoami:", err);
-    alert("Falha ao validar acesso administrativo.");
-    window.location.href = "index.html";
-    return;
+    console.error("❌ Erro na inicialização:", err);
   }
+}
 
-  await fetchAllOps();
-  await fetchPendingUsers();
-  // ✅ Carrega ocorrências na inicialização
-  await loadOcorrencias();
-
-  initCharts();
-  wireKpiClicks();
-  wireFiltersAndActions();
-  wirePagination();
-  wireLogout();
-
-  rerenderAll();
-  renderPendingUsers();
-
-  console.debug("✅ Admin.js inicializado com sucesso!");
-  console.debug("📊 Total de operações:", state.allOps.length);
+// ====== Geração de .EML por ocorrência (event delegation, não quebra nada existente) ======
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest?.('.btn-gerar-eml');
+  if (!btn) return;
+  try {
+    const to = btn.dataset.to || '';
+    const subject = btn.dataset.subject || 'Aviso de Ocorrência';
+    const corpo = (btn.dataset.body || btn.getAttribute('data-body') || '').replace(/\n/g, '\r\n');
+    const eml = `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${corpo}`;
+    const blob = new Blob([eml], { type: 'message/rfc822' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ocorrencia_${Date.now()}.eml`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2500);
+  } catch (e) {
+    console.error('Falha ao gerar EML:', e);
+    alert('Não foi possível gerar o EML desta ocorrência.');
+  }
 });
+// ====== /EML ======
+// ✅ NOVO: Handler para gerar EML com todas as ocorrências filtradas
+const btnGerarEMLOcorrencias = document.getElementById('ocorrencias-gerar-eml-btn');
+if (btnGerarEMLOcorrencias) {
+  btnGerarEMLOcorrencias.addEventListener('click', () => {
+    try {
+      const ocorrencias = state.ocorrencias || [];
+
+      if (ocorrencias.length === 0) {
+        Toast?.warning?.('Nenhuma ocorrência para gerar e-mail. Use os filtros para buscar.');
+        return;
+      }
+
+      // Monta o corpo do e-mail
+      let corpo = `Prezados(as),\n\nSegue relatório de ocorrências identificadas:\n\n`;
+      corpo += `${'='.repeat(80)}\n\n`;
+
+      ocorrencias.forEach((occ, idx) => {
+        corpo += `${idx + 1}. OCORRÊNCIA\n`;
+        corpo += `   Booking: ${occ.booking || '—'}\n`;
+        corpo += `   Container: ${occ.container || '—'}\n`;
+        corpo += `   Tipo: ${occ.tipo || '—'}\n`;
+        corpo += `   Data: ${occ.data_ocorrencia || '—'}\n`;
+        corpo += `   Descrição: ${occ.descricao || '—'}\n`;
+        corpo += `   Responsável: ${occ.responsavel || '—'}\n\n`;
+      });
+
+      corpo += `${'='.repeat(80)}\n\n`;
+      corpo += `Total de ocorrências: ${ocorrencias.length}\n\n`;
+      corpo += `Atenciosamente,\nCustomer Service / Mercosul Line`;
+
+      // Gera o EML
+      const to = 'cliente@email.com'; // Pode ser parametrizado
+      const subject = `Relatório de Ocorrências - Mercosul Line`;
+      const eml = `To: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${corpo.replace(/\n/g, '\r\n')}`;
+
+      const blob = new Blob([eml], { type: 'message/rfc822' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-ocorrencias-${Date.now()}.eml`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2500);
+
+      Toast?.success?.(`EML gerado com ${ocorrencias.length} ocorrências!`);
+    } catch (e) {
+      console.error('Erro ao gerar EML de ocorrências:', e);
+      Toast?.error?.('Não foi possível gerar o EML: ' + e.message);
+    }
+  });
+}

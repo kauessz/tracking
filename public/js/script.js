@@ -138,7 +138,7 @@ function renderTracking(items) {
             <div><span class="font-semibold text-gray-700">Início Execução:</span> <span class="text-gray-900">${formatDateTime(op.dt_inicio_execucao)}</span></div>
             <div><span class="font-semibold text-gray-700">Fim Execução:</span> <span class="text-gray-900">${formatDateTime(op.dt_fim_execucao)}</span></div>
 
-            <div><span class="font-semibold text-gray-700">Motorista:</span> <span class="text-gray-900">${op.motorista || "N/A"}</span></div>
+            <div><span class="font-semibold text-gray-700">Motorista:</span> <span class="text-gray-900">${op.nome_motorista || "N/A"}</span></div>
             <div><span class="font-semibold text-gray-700">CPF:</span> <span class="text-gray-900">${op.cpf_motorista || "N/A"}</span></div>
 
             <div><span class="font-semibold text-gray-700">Veículo:</span> <span class="text-gray-900">${op.placa_veiculo || "N/A"}</span></div>
@@ -244,17 +244,29 @@ async function handleOcorrencia(e) {
   statusDiv.classList.remove('hidden');
 
   try {
-    const resp = await fetch(`${API_BASE}/admin/ocorrencias/register`, {
+    // Busca informações da operação para preencher dados adicionais
+    const trackResp = await fetch(`${API_BASE}/trackingList?booking=${encodeURIComponent(booking)}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    const trackData = await trackResp.json().catch(() => ({ items: [] }));
+    const operacao = trackData.items?.[0] || {};
+
+    const resp = await fetch(`${API_BASE}/ocorrencias/create`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         booking,
         container,
-        tipo,
-        descricao,
-        data_registro: new Date().toISOString()
+        embarcador_nome: operacao.embarcador_nome || "Não informado",
+        porto: operacao.porto_operacao || null,
+        previsao_original: operacao.previsao_inicio_atendimento || null,
+        tipo_ocorrencia: tipo,
+        descricao: descricao,
+        nova_previsao: null
       }),
     });
 
