@@ -1,5 +1,9 @@
-// portal.js - PORTAL DO CLIENTE/EMBARCADOR - VERSÃO CORRIGIDA
-// ==========================================
+// portal.js - PORTAL DO CLIENTE/EMBARCADOR - VERSÃO CORRIGIDA FINAL
+// ✅ CORREÇÕES APLICADAS:
+// 1. Usa calculateDelayInMinutes do utils.js (regras unificadas)
+// 2. Desconsidera operações canceladas
+// 3. Valida apenas número de programação (não booking)
+// 4. Melhoria no carregamento e tratamento de erros
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import {
@@ -8,6 +12,7 @@ import {
   signOut,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getApiUrl } from './config.js';
+import { calculateDelayInMinutes } from './utils.js';
 
 // CONFIG
 const API_BASE = getApiUrl();
@@ -27,7 +32,7 @@ const state = {
     status: 'all',
     range: '30d',
     search: '',
-    date: '' // ✅ NOVO: filtro por data específica
+    date: ''
   }
 };
 
@@ -43,7 +48,7 @@ const kpiCompletedEl = document.getElementById("kpi-completed");
 const filterStatusEl = document.getElementById("filter-status");
 const filterRangeEl = document.getElementById("filter-range");
 const filterBookingEl = document.getElementById("filter-booking");
-const filterDateEl = document.getElementById("filter-date"); // ✅ NOVO
+const filterDateEl = document.getElementById("filter-date");
 const clearFiltersBtn = document.getElementById("clear-filters");
 
 const operationsListEl = document.getElementById("operations-list");
@@ -62,34 +67,25 @@ function formatDateTime(value) {
   return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 }
 
-function calculateDelayInMinutes(op) {
-  const programada = op.previsao_inicio_atendimento || op.DataProgramada;
-  const chegada = op.dt_inicio_execucao || op.DataChegada;
-  
-  if (!programada || !chegada) return 0;
-  
-  const dtProg = new Date(programada);
-  const dtCheg = new Date(chegada);
-  
-  if (isNaN(dtProg.getTime()) || isNaN(dtCheg.getTime())) return 0;
-  
-  const diffMs = dtCheg.getTime() - dtProg.getTime();
-  return Math.floor(diffMs / (1000 * 60));
-}
-
 function formatMinutesToHHMM(minutes) {
-  if (minutes <= 0) return "ON TIME";
+  if (minutes <= 0) return "NO PRAZO";
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return `${h}h ${m}m`;
 }
 
-// ✅ CORREÇÃO PROBLEMA 1: Normalizar operação com mapeamento correto
+// ✅ FUNÇÃO AUXILIAR: Verifica se operação está cancelada
+function isCancelada(op) {
+  const situacao = op.status_operacao || op.situacao || op.tipo_programacao || '';
+  return situacao.toString().toLowerCase().includes('cancelad');
+}
+
+// ✅ CORREÇÃO: Normalizar operação com mapeamento correto
 function normalizeOp(raw) {
   return {
     id: raw.id,
+    numero_programacao: raw.numero_programacao || null,
     booking: raw.booking || raw.Booking || null,
-    // ✅ CORRIGIDO: backend retorna 'containers' (plural)
     containers: raw.containers || raw.container || raw.Container || null,
     embarcador_nome: raw.embarcador_nome || raw.Cliente || raw.embarcador || null,
     status_operacao: raw.status_operacao || raw.StatusOperacao || raw.tipo_programacao || null,
@@ -128,8 +124,27 @@ async function fetchMyOperations() {
 
     if (data.success) {
       console.log("✅ Sucesso! Total de itens:", data.items?.length || 0);
-      state.allOps = (data.items || []).map(normalizeOp);
-      console.log("🗂️ Operações normalizadas:", state.allOps.length);
+      
+      // ✅ CORREÇÃO: Normaliza e filtra canceladas e sem número de programação
+      state.allOps = (data.items || [])
+        .map(normalizeOp)
+        .filter(op => {
+          // Valida apenas número de programação (não booking)
+          if (!op.numero_programacao) {
+            console.log("⚠️ Operação sem número de programação ignorada:", op);
+            return false;
+          }
+          
+          // Desconsidera canceladas
+          if (isCancelada(op)) {
+            console.log("⚠️ Operação cancelada ignorada:", op);
+            return false;
+          }
+          
+          return true;
+        });
+      
+      console.log("🗂️ Operações normalizadas e filtradas:", state.allOps.length);
       applyFilters();
       updateKPIs();
     } else {
@@ -153,6 +168,7 @@ function applyFilters() {
   // Filtro de status
   if (state.filters.status !== 'all') {
     filtered = filtered.filter(op => {
+      // ✅ USA calculateDelayInMinutes do utils.js
       const delay = calculateDelayInMinutes(op);
       const hasEnd = !!op.dt_fim_execucao;
 
@@ -183,8 +199,7 @@ function applyFilters() {
     });
   }
 
-<<<<<<< HEAD
-  // ✅ NOVO: Filtro de data específica (tem prioridade sobre período)
+  // Filtro de data específica (tem prioridade sobre período)
   if (state.filters.date) {
     const targetDate = new Date(state.filters.date);
     targetDate.setHours(0, 0, 0, 0);
@@ -198,8 +213,6 @@ function applyFilters() {
     });
   }
 
-=======
->>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
   // Filtro de busca
   if (state.filters.search) {
     const search = state.filters.search.toLowerCase();
@@ -207,7 +220,8 @@ function applyFilters() {
       return (
         (op.booking || '').toLowerCase().includes(search) ||
         (op.containers || '').toLowerCase().includes(search) ||
-        (op.porto_operacao || '').toLowerCase().includes(search)
+        (op.porto_operacao || '').toLowerCase().includes(search) ||
+        (op.numero_programacao || '').toLowerCase().includes(search)
       );
     });
   }
@@ -220,6 +234,8 @@ function applyFilters() {
 // ATUALIZAR KPIs
 function updateKPIs() {
   const total = state.allOps.length;
+  
+  // ✅ USA calculateDelayInMinutes do utils.js
   const late = state.allOps.filter(op => calculateDelayInMinutes(op) > 0 && !op.dt_fim_execucao).length;
   const inProgress = state.allOps.filter(op => op.dt_inicio_execucao && !op.dt_fim_execucao).length;
   const completed = state.allOps.filter(op => op.dt_fim_execucao).length;
@@ -234,43 +250,42 @@ function updateKPIs() {
 function renderOperations() {
   console.log("🎨 Renderizando operações...");
   console.log("📋 Elemento operations-list:", operationsListEl ? "encontrado" : "NÃO ENCONTRADO");
-  console.log("📊 Operações filtradas:", state.filteredOps.length);
 
   if (!operationsListEl) {
-    console.error("❌ Elemento #operations-list não encontrado no DOM!");
+    console.error("❌ Elemento operations-list não encontrado no DOM!");
     return;
   }
 
   if (state.filteredOps.length === 0) {
-    console.log("⚠️ Nenhuma operação para exibir");
     operationsListEl.innerHTML = `
-      <p class="text-gray-500 text-center py-12">
-        Nenhuma operação encontrada com os filtros aplicados.
-      </p>
+      <div class="glass-card p-8 text-center">
+        <p class="text-gray-500 text-lg">📭 Nenhuma operação encontrada</p>
+        <p class="text-gray-400 text-sm mt-2">Ajuste os filtros ou aguarde novas operações</p>
+      </div>
     `;
     return;
   }
-  
+
   const html = state.filteredOps.map(op => {
+    // ✅ USA calculateDelayInMinutes do utils.js
     const delay = calculateDelayInMinutes(op);
-    const delayText = delay > 0 ? formatMinutesToHHMM(delay) : "ON TIME";
-    const isLate = delay > 0;
-    const isCompleted = !!op.dt_fim_execucao;
+    
+    let statusText = "No Prazo";
+    let statusColor = "bg-green-100 text-green-800";
 
-    const statusColor = isCompleted
-      ? 'bg-gray-100 text-gray-700'
-      : isLate
-        ? 'bg-red-100 text-red-700'
-        : 'bg-green-100 text-green-700';
-
-    const statusText = isCompleted
-      ? '✅ Concluída'
-      : isLate
-        ? '⏰ Em Atraso'
-        : '🚢 No Prazo';
+    if (op.dt_fim_execucao) {
+      statusText = "Concluída";
+      statusColor = "bg-blue-100 text-blue-800";
+    } else if (delay > 0) {
+      statusText = `Atrasada ${formatMinutesToHHMM(delay)}`;
+      statusColor = "bg-red-100 text-red-800";
+    } else if (op.dt_inicio_execucao) {
+      statusText = "Em Andamento";
+      statusColor = "bg-yellow-100 text-yellow-800";
+    }
 
     return `
-      <div class="glass-card p-5 border-l-4 ${isCompleted ? 'border-gray-400' : isLate ? 'border-red-500' : 'border-green-500'}">
+      <div class="glass-card p-6 hover:shadow-xl transition-all">
         <div class="flex items-start justify-between mb-4">
           <div>
             <h3 class="text-xl font-bold text-gray-900">${op.booking || 'N/A'}</h3>
@@ -288,17 +303,18 @@ function renderOperations() {
           </div>
 
           <div>
+            <span class="font-semibold text-gray-700">Nº Programação:</span>
+            <span class="text-gray-900 ml-2">${op.numero_programacao || 'N/A'}</span>
+          </div>
+
+          <div>
             <span class="font-semibold text-gray-700">Booking:</span>
             <span class="text-gray-900 ml-2">${op.booking || 'N/A'}</span>
           </div>
 
           <div>
             <span class="font-semibold text-gray-700">Container:</span>
-<<<<<<< HEAD
             <span class="text-gray-900 ml-2">${op.containers || 'N/A'}</span>
-=======
-            <span class="text-gray-900 ml-2">${op.container || 'N/A'}</span>
->>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
           </div>
 
           <div>
@@ -306,14 +322,11 @@ function renderOperations() {
             <span class="text-gray-900 ml-2">${op.status_operacao || 'N/A'}</span>
           </div>
 
-<<<<<<< HEAD
           <div>
             <span class="font-semibold text-gray-700">Porto Operação:</span>
             <span class="text-gray-900 ml-2">${op.porto_operacao || 'N/A'}</span>
           </div>
 
-=======
->>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
           <div>
             <span class="font-semibold text-gray-700">Previsão Início:</span>
             <span class="text-gray-900 ml-2">${formatDateTime(op.previsao_inicio_atendimento)}</span>
@@ -332,7 +345,6 @@ function renderOperations() {
           <div>
             <span class="font-semibold text-gray-700">Fim Execução:</span>
             <span class="text-gray-900 ml-2">${formatDateTime(op.dt_fim_execucao)}</span>
-<<<<<<< HEAD
           </div>
 
           <div>
@@ -364,33 +376,6 @@ function renderOperations() {
           <div class="md:col-span-2">
             <span class="font-semibold text-gray-700">Motivo Atraso:</span>
             <span class="text-gray-900 ml-2">${op.motivo_atraso}</span>
-=======
-          </div>
-
-          <div>
-            <span class="font-semibold text-gray-700">Motorista:</span>
-            <span class="text-gray-900 ml-2">${op.motorista || op.nome_motorista || 'N/A'}</span>
-          </div>
-
-          <div>
-            <span class="font-semibold text-gray-700">CPF:</span>
-            <span class="text-gray-900 ml-2">${op.cpf_motorista || 'N/A'}</span>
-          </div>
-
-          <div>
-            <span class="font-semibold text-gray-700">Veículo:</span>
-            <span class="text-gray-900 ml-2">${op.placa_veiculo || 'N/A'}</span>
-          </div>
-
-          <div>
-            <span class="font-semibold text-gray-700">Reboque:</span>
-            <span class="text-gray-900 ml-2">${op.placa_carreta || 'N/A'}</span>
-          </div>
-
-          <div class="md:col-span-2 pt-2 border-t border-gray-100 mt-2">
-            <span class="font-semibold text-gray-700">Justificativa Atraso:</span>
-            <span class="text-gray-900 ml-2">${op.justificativa_atraso || '-'}</span>
->>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
           </div>
           ` : ''}
         </div>
@@ -441,7 +426,6 @@ function setupEventListeners() {
     });
   }
   
-  // ✅ NOVO: Event listener para filtro de data
   if (filterDateEl) {
     filterDateEl.addEventListener("change", () => {
       state.filters.date = filterDateEl.value;
@@ -462,7 +446,7 @@ function setupEventListeners() {
       if (filterStatusEl) filterStatusEl.value = 'all';
       if (filterRangeEl) filterRangeEl.value = '30d';
       if (filterBookingEl) filterBookingEl.value = '';
-      if (filterDateEl) filterDateEl.value = ''; // ✅ NOVO
+      if (filterDateEl) filterDateEl.value = '';
       applyFilters();
     });
   }
@@ -512,11 +496,7 @@ onAuthStateChanged(auth, async (user) => {
     console.log("✅ Usuário é embarcador ativo!");
     currentUser = whoData.user;
 
-<<<<<<< HEAD
-    // ✅ CORREÇÃO PROBLEMA 5: Atualiza nome do usuário E ROLE
-=======
     // Atualiza nome do usuário
->>>>>>> a170d7447f1d0c00c0b136736ae289d646fda103
     if (userNameEl) {
       const roleDisplay = currentUser.role === 'embarcador' ? 'Embarcador' : 
                          currentUser.role === 'operador' ? 'Operador' : 

@@ -1,9 +1,10 @@
 // js/analytics.js - VERSÃO COMPLETA CORRIGIDA
-// ✅ CORREÇÕES APLICADAS:
-// 1. KPIs mostram operações ao clicar
-// 2. Gráfico de motivos de atraso renderiza corretamente
-// 3. Gráfico Target renderiza com dados corretos
-// 4. Uso do calculateDelayInMinutes unificado
+// ✅ CORREÇÕES FINAIS:
+// 1. IDs dos canvas corrigidos: chart-coletas, chart-entregas, chart-motivos
+// 2. Gráficos de Coletas/Entregas como rosquinhas (doughnut)
+// 3. Gráfico de Motivos como barras horizontais
+// 4. Gráfico Target com linha vermelha visível
+// 5. Não mostra dados falsos quando não há operações
 
 import { Toast, Loading } from "./utilities.js";
 import { getApiUrl } from "./config.js";
@@ -82,7 +83,6 @@ export async function carregarEmbarcadoresAnalytics() {
 }
 
 // Buscar analytics com múltiplos embarcadores
-
 export async function buscarAnalytics() {
   try {
     const token = getAuthToken ? getAuthToken() : null;
@@ -93,19 +93,17 @@ export async function buscarAnalytics() {
 
     Loading?.show?.('Carregando analytics...');
 
-    // ✅ CORREÇÃO: Pega os valores diretamente da instância do Choices se existir
+    // Pega os valores diretamente da instância do Choices se existir
     let embarcadorIds = [];
     
     if (analyticsState.embarcadorChoices) {
-      // Pega valor do plugin Choices
-      const values = analyticsState.embarcadorChoices.getValue(true); // true retorna apenas os values
+      const values = analyticsState.embarcadorChoices.getValue(true);
       if (Array.isArray(values)) {
         embarcadorIds = values;
       } else if (values) {
         embarcadorIds = [values];
       }
     } else {
-      // Fallback para select normal
       const selectEl = document.getElementById("analytics-embarcador");
       if (selectEl) {
         embarcadorIds = Array.from(selectEl.selectedOptions)
@@ -160,7 +158,7 @@ export async function buscarAnalytics() {
   }
 }
 
-// ✅ CORREÇÃO: Renderizar todos os dados de analytics INCLUINDO O TARGET
+// Renderizar todos os dados de analytics
 function renderizarAnalytics() {
   if (!analyticsState.data) {
     console.warn("Sem dados para renderizar");
@@ -169,12 +167,14 @@ function renderizarAnalytics() {
 
   const data = analyticsState.data;
 
-  // Resumo geral
+  // Resumo geral - desconsidera cancelados
   const totalOpsEl = document.getElementById("kpi-total-ops-analytics");
   const totalColetasEl = document.getElementById("kpi-total-coletas");
   const totalEntregasEl = document.getElementById("kpi-total-entregas");
 
-  if (totalOpsEl) totalOpsEl.textContent = data.resumo.total_operacoes;
+  const totalNaoCanceladas = (data.resumo.total_operacoes || 0) - (data.resumo.canceladas || 0);
+  
+  if (totalOpsEl) totalOpsEl.textContent = totalNaoCanceladas;
   if (totalColetasEl) totalColetasEl.textContent = data.resumo.total_coletas;
   if (totalEntregasEl) totalEntregasEl.textContent = data.resumo.total_entregas;
 
@@ -221,19 +221,14 @@ function renderizarAnalytics() {
   renderizarGraficoColetas();
   renderizarGraficoEntregas();
   renderizarGraficoMotivos();
-  
-  // ✅ CORREÇÃO CRÍTICA: Renderizar gráfico Target
   renderTargetChart();
-  
-  // ✅ NOVO: Adicionar handlers de click nos KPIs
   wireKPIClickHandlers();
 }
 
-// ✅ NOVO: Handlers de click nos KPIs para mostrar operações
+// Handlers de click nos KPIs
 function wireKPIClickHandlers() {
   const pont = analyticsState.data.pontualidade_geral;
   
-  // Função helper para mostrar modal com operações
   const showOperacoesModal = (categoria, ops) => {
     if (!ops || ops.length === 0) {
       Toast?.info?.(`Nenhuma operação ${categoria}`);
@@ -242,289 +237,299 @@ function wireKPIClickHandlers() {
     
     const modalHTML = `
       <div id="analytics-ops-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="z-index: 9999;">
-        <div class="bg-white rounded-lg shadow-2xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-hidden">
-          <div class="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-indigo-600 to-purple-600">
-            <h3 class="text-xl font-bold text-white">
-              ${categoria} - ${ops.length} operações
-            </h3>
-            <button onclick="document.getElementById('analytics-ops-modal').remove()" 
-                    class="text-white hover:text-gray-200 text-2xl font-bold">
-              ×
-            </button>
+        <div class="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+          <div class="bg-gradient-to-r from-purple-600 to-blue-600 p-6 text-white">
+            <div class="flex items-center justify-between">
+              <h2 class="text-2xl font-bold">${categoria}</h2>
+              <button onclick="document.getElementById('analytics-ops-modal').remove()" 
+                class="text-white hover:text-gray-200 text-3xl font-bold">&times;</button>
+            </div>
+            <p class="text-sm opacity-90 mt-2">Total: ${ops.length} operações</p>
           </div>
-          <div class="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-            <table class="w-full text-sm">
+          
+          <div class="overflow-auto flex-1 p-6">
+            <table class="w-full">
               <thead class="bg-gray-100 sticky top-0">
                 <tr>
-                  <th class="p-3 text-left font-semibold">Booking</th>
-                  <th class="p-3 text-left font-semibold">Container</th>
-                  <th class="p-3 text-left font-semibold">Embarcador</th>
-                  <th class="p-3 text-left font-semibold">Motivo</th>
+                  <th class="p-3 text-left text-sm font-bold">Booking</th>
+                  <th class="p-3 text-left text-sm font-bold">Container</th>
+                  <th class="p-3 text-left text-sm font-bold">Embarcador</th>
+                  <th class="p-3 text-left text-sm font-bold">Tipo</th>
+                  <th class="p-3 text-left text-sm font-bold">Porto</th>
+                  <th class="p-3 text-left text-sm font-bold">Prev. Início</th>
+                  <th class="p-3 text-left text-sm font-bold">Atraso</th>
                 </tr>
               </thead>
               <tbody>
-                ${ops.map(op => `
-                  <tr class="border-b border-gray-200 hover:bg-gray-50">
-                    <td class="p-3">${op.booking || '—'}</td>
-                    <td class="p-3">${op.container || '—'}</td>
-                    <td class="p-3">${op.embarcador_nome || '—'}</td>
-                    <td class="p-3 text-xs">${op.motivo_atraso || 'Sem justificativa'}</td>
-                  </tr>
-                `).join('')}
+                ${ops.map(op => {
+                  const atraso = calculateDelayInMinutes(op);
+                  const atrasoStr = atraso > 0 ? `${Math.floor(atraso/60)}h ${atraso%60}m` : 'No Prazo';
+                  const atrasoClass = atraso > 0 ? 'text-red-600 font-bold' : 'text-green-600';
+                  
+                  return `
+                    <tr class="border-b hover:bg-gray-50">
+                      <td class="p-3 text-sm">${op.booking || '-'}</td>
+                      <td class="p-3 text-sm">${op.containers || op.container || '-'}</td>
+                      <td class="p-3 text-sm">${op.embarcador_nome || '-'}</td>
+                      <td class="p-3 text-sm">${op.tipo_programacao || '-'}</td>
+                      <td class="p-3 text-sm">${op.porto_operacao || '-'}</td>
+                      <td class="p-3 text-sm">${formatDate(op.previsao_inicio_atendimento)}</td>
+                      <td class="p-3 text-sm ${atrasoClass}">${atrasoStr}</td>
+                    </tr>
+                  `;
+                }).join('')}
               </tbody>
             </table>
+          </div>
+          
+          <div class="bg-gray-50 p-4 border-t">
+            <button onclick="document.getElementById('analytics-ops-modal').remove()" 
+              class="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-6 py-2 rounded-xl font-semibold hover:shadow-lg transition-all">
+              Fechar
+            </button>
           </div>
         </div>
       </div>
     `;
     
+    const oldModal = document.getElementById('analytics-ops-modal');
+    if (oldModal) oldModal.remove();
+    
     document.body.insertAdjacentHTML('beforeend', modalHTML);
   };
   
-  // Card "No Prazo"
-  const cardNoPrazo = document.getElementById('pont-card-no-prazo');
-  if (cardNoPrazo) {
-    cardNoPrazo.style.cursor = 'pointer';
-    cardNoPrazo.onclick = () => {
-      showOperacoesModal('No Prazo', pont.no_prazo.operacoes);
-    };
-  }
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+  };
   
-  // Card "Até 1h"
-  const cardAte1h = document.getElementById('pont-card-ate1h');
-  if (cardAte1h) {
-    cardAte1h.style.cursor = 'pointer';
-    cardAte1h.onclick = () => {
-      showOperacoesModal('Atraso até 1h', pont.ate_1h.operacoes);
-    };
-  }
+  const addClickHandler = (elementId, categoria, ops) => {
+    const el = document.getElementById(elementId);
+    if (el && ops && ops.length > 0) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => showOperacoesModal(categoria, ops));
+    }
+  };
   
-  // Card "2-5h"
-  const card2a5h = document.getElementById('pont-card-2a5h');
-  if (card2a5h) {
-    card2a5h.style.cursor = 'pointer';
-    card2a5h.onclick = () => {
-      showOperacoesModal('Atraso 2-5h', pont.de_2_a_5h.operacoes);
-    };
-  }
-  
-  // Card "5-10h"
-  const card5a10h = document.getElementById('pont-card-5a10h');
-  if (card5a10h) {
-    card5a10h.style.cursor = 'pointer';
-    card5a10h.onclick = () => {
-      showOperacoesModal('Atraso 5-10h', pont.de_5_a_10h.operacoes);
-    };
-  }
-  
-  // Card "Mais de 10h"
-  const cardMais10h = document.getElementById('pont-card-mais10h');
-  if (cardMais10h) {
-    cardMais10h.style.cursor = 'pointer';
-    cardMais10h.onclick = () => {
-      showOperacoesModal('Atraso > 10h', pont.mais_10h.operacoes);
-    };
-  }
-  
-  console.log("✅ Handlers de click nos KPIs instalados");
+  addClickHandler('pont-card-no-prazo', 'Operações no Prazo', pont.no_prazo.operacoes);
+  addClickHandler('pont-card-ate1h', 'Operações com Atraso até 1h', pont.ate_1h.operacoes);
+  addClickHandler('pont-card-2a5h', 'Operações com Atraso de 2 a 5h', pont.de_2_a_5h.operacoes);
+  addClickHandler('pont-card-5a10h', 'Operações com Atraso de 5 a 10h', pont.de_5_a_10h.operacoes);
+  addClickHandler('pont-card-mais10h', 'Operações com Atraso Maior que 10h', pont.mais_10h.operacoes);
 }
 
-// Gráfico de Coletas
-function renderizarGraficoColetas() {
-  const canvas = document.getElementById("chart-coletas");
-  if (!canvas) return;
+// ✅ Gráfico de Coletas - Rosquinha
+// js/analytics.js
 
-  const ctx = canvas.getContext("2d");
+// ✅ Gráfico de Coletas - Rosquinha (CORRIGIDO)
+function renderizarGraficoColetas() {
+  const canvas = document.getElementById('chart-coletas');
+  if (!canvas) return;
 
   if (analyticsState.chartColetas) {
     analyticsState.chartColetas.destroy();
-    analyticsState.chartColetas = null;
   }
 
-  const data = analyticsState.data.pontualidade_coletas;
-  const total = Number(data.total || 0);
-  const noPrazo = Math.max(0, Math.min(Number(data.no_prazo || 0), total));
-  const atrasado = Math.max(0, total - noPrazo);
+  const pont = analyticsState.data?.pontualidade_coletas || {};
+  const total = pont.total || 0;
+  const noPrazo = pont.no_prazo || 0;
+  // A correção é aqui: calculamos o atrasado subtraindo, pois o backend não manda o detalhe por faixa aqui
+  const atrasado = total - noPrazo; 
 
-  const Chart = window.Chart;
-  if (!Chart) {
-    console.error("Chart.js não está disponível");
-    return;
-  }
-
-  analyticsState.chartColetas = new Chart(ctx, {
-    type: "doughnut",
+  analyticsState.chartColetas = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
     data: {
-      labels: ["No Prazo", "Atrasado"],
-      datasets: [
-        {
-          data: [noPrazo, atrasado],
-          backgroundColor: ["#43e97b", "#f45c43"],
-          borderWidth: 0,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: "70%",
-      plugins: {
-        legend: {
-          position: "bottom",
-          labels: {
-            padding: 15,
-            font: { size: 12, weight: "bold" },
-          },
-        },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const val = ctx.parsed;
-              const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
-              return `${ctx.label}: ${val} (${pct}%)`;
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-// Gráfico de Entregas
-function renderizarGraficoEntregas() {
-  const canvas = document.getElementById("chart-entregas");
-  if (!canvas) return;
-
-  const ctx = canvas.getContext("2d");
-
-  if (analyticsState.chartEntregas) {
-    analyticsState.chartEntregas.destroy();
-    analyticsState.chartEntregas = null;
-  }
-
-  const data = analyticsState.data.pontualidade_entregas;
-  const total = Number(data.total || 0);
-  const noPrazo = Math.max(0, Math.min(Number(data.no_prazo || 0), total));
-  const atrasado = Math.max(0, total - noPrazo);
-
-  const Chart = window.Chart;
-  if (!Chart) return;
-
-  analyticsState.chartEntregas = new Chart(ctx, {
-    type: "doughnut",
-    data: {
-      labels: ["No Prazo", "Atrasado"],
-      datasets: [
-        {
-          data: [noPrazo, atrasado],
-          backgroundColor: ["#4facfe", "#f093fb"],
-          borderWidth: 0,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: "70%",
-      plugins: {
-        legend: {
-          position: "bottom",
-          labels: {
-            padding: 15,
-            font: { size: 12, weight: "bold" },
-          },
-        },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const val = ctx.parsed;
-              const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
-              return `${ctx.label}: ${val} (${pct}%)`;
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-// ✅ CORREÇÃO: Gráfico de Motivos renderiza corretamente
-function renderizarGraficoMotivos() {
-  const canvas = document.getElementById("chart-motivos");
-  if (!canvas) return;
-
-  if (analyticsState.chartMotivos) analyticsState.chartMotivos.destroy();
-
-  const motivos = analyticsState.data?.motivos_atraso || [];
-  
-  // Registro do plugin não é necessário manualmente na v3 se importado via script tag, 
-  // mas fazemos por segurança se estiver no escopo.
-  const plugins = typeof ChartDataLabels !== 'undefined' ? [ChartDataLabels] : [];
-
-  analyticsState.chartMotivos = new Chart(canvas.getContext("2d"), {
-    type: "bar",
-    data: {
-      labels: motivos.map(m => {
-          const t = m.motivo || '';
-          return t.length > 45 ? t.substring(0, 45) + '...' : t;
-      }),
+      labels: ['No Prazo', 'Atrasado'],
       datasets: [{
-        label: "Qtd",
-        data: motivos.map(m => m.quantidade),
-        backgroundColor: "#667eea",
-        borderRadius: 4,
-        barPercentage: 0.7
+        data: [noPrazo, atrasado],
+        backgroundColor: ['#10B981', '#EF4444'],
+        borderWidth: 0
       }]
     },
-    plugins: plugins,
     options: {
-      indexAxis: 'y',
       responsive: true,
-      maintainAspectRatio: false,
-      layout: { padding: { right: 50 } },
+      maintainAspectRatio: true,
       plugins: {
-        legend: { display: false },
-        datalabels: {
-            anchor: 'end',
-            align: 'end',
-            color: '#4a5568',
-            font: { weight: 'bold', size: 11 },
-            formatter: (val) => val
-        }
-      },
-      scales: {
-        x: { beginAtZero: true, grid: { display: false } },
-        y: { grid: { display: false } }
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { font: { size: 11 }, padding: 10, boxWidth: 12, boxHeight: 12 }
+        },
+        tooltip: { enabled: true }
       }
     }
   });
 }
 
-// ✅ Gráfico Target (Ajustado para Chart.js v3 + Linha 95%)
-// ✅ Gráfico Target (Ajustado para Chart.js v3 + Linha 95% VISÍVEL)
-export function renderTargetChart() {
-  const canvas = document.getElementById('target-chart');
+// ✅ Gráfico de Entregas - Rosquinha (CORRIGIDO)
+function renderizarGraficoEntregas() {
+  const canvas = document.getElementById('chart-entregas');
   if (!canvas) return;
 
-  if (targetChartInstance) targetChartInstance.destroy();
+  if (analyticsState.chartEntregas) {
+    analyticsState.chartEntregas.destroy();
+  }
+
+  const pont = analyticsState.data?.pontualidade_entregas || {};
+  const total = pont.total || 0;
+  const noPrazo = pont.no_prazo || 0;
+  // Correção aqui também
+  const atrasado = total - noPrazo;
+
+  analyticsState.chartEntregas = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: ['No Prazo', 'Atrasado'],
+      datasets: [{
+        data: [noPrazo, atrasado],
+        backgroundColor: ['#3B82F6', '#A855F7'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { font: { size: 11 }, padding: 10, boxWidth: 12, boxHeight: 12 }
+        },
+        tooltip: { enabled: true }
+      }
+    }
+  });
+}
+
+// ✅ Gráfico de Motivos - Barras Horizontais
+function renderizarGraficoMotivos() {
+  const canvas = document.getElementById('chart-motivos');
+  if (!canvas) {
+    console.error('❌ Canvas chart-motivos não encontrado!');
+    return;
+  }
+
+  if (analyticsState.chartMotivos) {
+    analyticsState.chartMotivos.destroy();
+  }
+
+  const motivos = analyticsState.data?.motivos_atraso || [];
+  
+  if (motivos.length === 0) {
+    const container = canvas.parentElement;
+    if (container) {
+      container.innerHTML = '<p class="text-center text-gray-500 py-8">Sem dados de motivos de atraso</p>';
+    }
+    return;
+  }
+
+  const labels = motivos.map(m => m.motivo || 'sem justificativa');
+  const valores = motivos.map(m => m.quantidade || 0);
+  const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#14B8A6', '#F97316'];
+
+  analyticsState.chartMotivos = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Quantidade',
+        data: valores,
+        backgroundColor: colors.slice(0, valores.length),
+        borderRadius: 4
+      }]
+    },
+    plugins: [ChartDataLabels],
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          display: true,
+          color: 'white',
+          font: { weight: 'bold', size: 11 },
+          anchor: 'end',
+          align: 'start',
+          offset: 4,
+          formatter: (val) => val
+        },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            label: (context) => `${context.label}: ${context.parsed.x} ocorrências`
+          }
+        }
+      },
+      scales: {
+        x: { 
+          beginAtZero: true, 
+          grid: { display: true, color: 'rgba(0,0,0,0.05)' },
+          ticks: { font: { size: 11 } }
+        },
+        y: { 
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ✅ Gráfico Target - Com Linha Vermelha 95%
+export function renderTargetChart() {
+  const canvas = document.getElementById('target-chart');
+  if (!canvas) {
+    console.error('❌ Canvas target-chart não encontrado!');
+    return;
+  }
+
+  if (targetChartInstance) {
+    targetChartInstance.destroy();
+  }
 
   const dados = analyticsState.data?.target_chart || [];
   
-  // Tratamento para caso não haja dados, exibe meses futuros ou atuais
-  const labels = dados.length > 0 
-      ? dados.map(d => {
-          const [ano, mes] = d.mes.split('-');
-          return `${getMonthName(parseInt(mes))}/${ano.slice(2)}`;
-        })
-      : getNextMonths(3);
+  // Se não há dados reais, mostra mensagem
+  if (dados.length === 0) {
+    const parentEl = canvas.parentElement;
+    if (parentEl) {
+      parentEl.innerHTML = `
+        <div class="flex items-center justify-center h-full">
+          <div class="text-center text-white">
+            <p class="text-2xl font-bold mb-4">📊 Sem Dados Disponíveis</p>
+            <p class="text-lg opacity-90">Não há operações no período selecionado para gerar o gráfico Target.</p>
+            <p class="text-sm opacity-75 mt-2">Selecione embarcadores e período com dados para visualizar o gráfico.</p>
+          </div>
+        </div>
+      `;
+    }
+    return;
+  }
 
-  const dColeta = dados.length ? dados.map(d => parseFloat(d.coletaPct)) : [0,0,0];
-  const dEntrega = dados.length ? dados.map(d => parseFloat(d.entregaPct)) : [0,0,0];
+  // Restaura canvas se foi substituído
+  const parentEl = canvas.parentElement;
+  if (!parentEl.querySelector('canvas')) {
+    parentEl.innerHTML = '<canvas id="target-chart"></canvas>';
+  }
+  const currentCanvas = document.getElementById('target-chart');
+  if (!currentCanvas) return;
+
+  // Processa dados reais
+  const labels = dados.map(d => {
+    const [ano, mes] = d.mes.split('-');
+    return `${getMonthName(parseInt(mes))}/${ano.slice(2)}`;
+  });
+
+  const dColeta = dados.map(d => parseFloat(d.coletaPct));
+  const dEntrega = dados.map(d => parseFloat(d.entregaPct));
   const dTarget = Array(labels.length).fill(95);
 
   const plugins = typeof ChartDataLabels !== 'undefined' ? [ChartDataLabels] : [];
 
-  targetChartInstance = new Chart(canvas.getContext('2d'), {
+  targetChartInstance = new Chart(currentCanvas.getContext('2d'), {
     type: 'bar',
     data: {
       labels: labels,
@@ -533,38 +538,59 @@ export function renderTargetChart() {
           label: 'COLETA %',
           data: dColeta,
           backgroundColor: '#10B981',
+          barThickness: 60,
+          maxBarThickness: 80,
           order: 2,
-          datalabels: { color: 'white', anchor: 'end', align: 'top', offset: -20, font: {weight:'bold', size: 12} }
+          datalabels: { 
+            color: 'white', 
+            anchor: 'center', 
+            align: 'center', 
+            font: {weight:'bold', size: 14}, 
+            formatter: (v) => v.toFixed(1) + '%' 
+          }
         },
         {
           label: 'ENTREGA %',
           data: dEntrega,
           backgroundColor: '#3B82F6',
+          barThickness: 60,
+          maxBarThickness: 80,
           order: 2,
-          datalabels: { color: 'white', anchor: 'end', align: 'top', offset: -20, font: {weight:'bold', size: 12} }
+          datalabels: { 
+            color: 'white', 
+            anchor: 'center', 
+            align: 'center', 
+            font: {weight:'bold', size: 14}, 
+            formatter: (v) => v.toFixed(1) + '%' 
+          }
         },
         {
-          type: 'line', // Linha de target - AGORA VISÍVEL
+          type: 'line',
           label: 'TARGET 95%',
           data: dTarget,
           borderColor: '#FF0000',
-          backgroundColor: 'rgba(255, 0, 0, 0.1)',
-          borderWidth: 4,
-          borderDash: [8, 4],
-          pointRadius: 5,
+          backgroundColor: 'transparent',
+          borderWidth: 3,
+          borderDash: [10, 5],
+          pointRadius: 6,
           pointBackgroundColor: '#FF0000',
           pointBorderColor: '#FFFFFF',
           pointBorderWidth: 2,
-          order: 1,
+          pointHoverRadius: 8,
+          order: 0,
           tension: 0,
           fill: false,
+          yAxisID: 'y',
           datalabels: { 
             display: true,
-            color: '#FF0000',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            borderRadius: 4,
-            padding: 4,
-            font: { weight: 'bold', size: 11 },
+            color: '#FFFFFF',
+            backgroundColor: '#FF0000',
+            borderRadius: 6,
+            padding: {top: 4, bottom: 4, left: 8, right: 8},
+            font: { weight: 'bold', size: 12 },
+            anchor: 'end',
+            align: 'top',
+            offset: 8,
             formatter: (v) => v + '%'
           }
         }
@@ -577,18 +603,23 @@ export function renderTargetChart() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { 
+          display: true,
+          position: 'top',
           labels: { 
             color: 'white', 
-            font: { weight: 'bold', size: 13 },
-            padding: 15,
-            usePointStyle: true
+            font: { weight: 'bold', size: 14 },
+            padding: 20,
+            usePointStyle: true,
+            pointStyle: 'circle'
           } 
         },
-        datalabels: {
-            formatter: (v) => v + '%',
-            color: 'white'
-        },
         tooltip: {
+          enabled: true,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          titleColor: 'white',
+          bodyColor: 'white',
+          borderColor: 'white',
+          borderWidth: 1,
           callbacks: {
             label: function(context) {
               let label = context.dataset.label || '';
@@ -602,12 +633,23 @@ export function renderTargetChart() {
       scales: {
         y: {
           beginAtZero: true,
-          max: 115, 
-          ticks: { color: 'white', callback: v => v+'%', font: { size: 12 } },
-          grid: { color: 'rgba(255,255,255,0.1)' }
+          max: 110,
+          ticks: { 
+            color: 'white', 
+            callback: v => v+'%', 
+            font: { size: 13, weight: 'bold' },
+            stepSize: 10
+          },
+          grid: { 
+            color: 'rgba(255,255,255,0.15)',
+            lineWidth: 1
+          }
         },
         x: {
-          ticks: { color: 'white', font: { weight: 'bold', size: 12 } },
+          ticks: { 
+            color: 'white', 
+            font: { weight: 'bold', size: 13 } 
+          },
           grid: { display: false }
         }
       }
@@ -616,17 +658,7 @@ export function renderTargetChart() {
 }
 
 function getMonthName(m) {
-    return ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"][m-1];
-}
-
-function getNextMonths(count) {
-    const arr = [];
-    const d = new Date();
-    for(let i=0; i<count; i++) {
-        arr.push(`${getMonthName(d.getMonth()+1)}/${d.getFullYear().toString().slice(2)}`);
-        d.setMonth(d.getMonth() + 1);
-    }
-    return arr;
+  return ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"][m-1];
 }
 
 // Limpar filtros
@@ -657,7 +689,7 @@ export function initAnalytics() {
     btnLimpar.addEventListener("click", limparFiltros);
   }
 
-  // ✅ CORREÇÃO: Botões de exportação PDF e PowerPoint
+  // Botões de exportação PDF e PowerPoint
   const btnPDF = document.getElementById("export-pdf-btn");
   if (btnPDF) {
     btnPDF.addEventListener("click", async () => {
@@ -669,7 +701,6 @@ export function initAnalytics() {
       try {
         Toast?.info?.("Gerando PDF...");
         
-        // Pega embarcadores selecionados
         const selectEl = document.getElementById("analytics-embarcador");
         const embarcadores = selectEl 
           ? Array.from(selectEl.selectedOptions).map(opt => opt.textContent)
@@ -678,7 +709,6 @@ export function initAnalytics() {
         const dataInicio = document.getElementById("analytics-data-inicio")?.value || "";
         const dataFim = document.getElementById("analytics-data-fim")?.value || "";
 
-        // Importa dinamicamente a função de exportação
         const { exportarPDF } = await import("./export-functions.js");
         await exportarPDF(analyticsState.data, embarcadores, dataInicio, dataFim);
         
@@ -701,7 +731,6 @@ export function initAnalytics() {
       try {
         Toast?.info?.("Gerando PowerPoint...");
         
-        // Pega embarcadores selecionados
         const selectEl = document.getElementById("analytics-embarcador");
         const embarcadores = selectEl 
           ? Array.from(selectEl.selectedOptions).map(opt => opt.textContent)
@@ -710,7 +739,6 @@ export function initAnalytics() {
         const dataInicio = document.getElementById("analytics-data-inicio")?.value || "";
         const dataFim = document.getElementById("analytics-data-fim")?.value || "";
 
-        // Importa dinamicamente a função de exportação
         const { exportarPowerPoint } = await import("./export-functions.js");
         await exportarPowerPoint(analyticsState.data, embarcadores, dataInicio, dataFim);
         

@@ -1309,11 +1309,11 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
     const { embarcador_id, data_inicio, data_fim } = req.query;
 
     let totalAbsolutoBanco = 0;
-    
+
     // Contagem rápida total se não houver filtro
     if (!embarcador_id && !data_inicio && !data_fim) {
-        const { count } = await supabase.from("operacoes").select("*", { count: "exact", head: true });
-        totalAbsolutoBanco = count;
+      const { count } = await supabase.from("operacoes").select("*", { count: "exact", head: true });
+      totalAbsolutoBanco = count;
     }
 
     let allOperacoes = [];
@@ -1353,49 +1353,54 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
         hasMore = false;
       } else {
         data.forEach(op => {
-            const status = (op.status_operacao || '').toLowerCase();
-            const isCanceled = status.includes('cancelad');
-            const atrasoCalc = calcularAtrasoLocal(op);
-            const noPrazo = atrasoCalc <= 0;
+          const status = (op.status_operacao || '').toLowerCase();
+          const isCanceled = status.includes('cancelad');
+          const atrasoCalc = calcularAtrasoLocal(op); // Função externa que você já tem
+          const noPrazo = atrasoCalc <= 0;
 
-            // ✅ CORREÇÃO CRÍTICA: Contagem de Motivos com normalização IGUAL ao frontend
-            if (!isCanceled && !noPrazo) {
-                // Prioriza justificativa_atraso pois é onde o upload salva o dado da planilha
-                let m = op.justificativa_atraso || op.motivo_atraso || 'sem justificativa';
-                m = m.toString().trim();
-                
-                // Normalização para agrupar "sem justificativa", "-", etc
-                if (m === '-' || m === '' || m.toLowerCase() === 'null') {
-                    m = 'sem justificativa';
-                }
-                
-                // ✅ CRÍTICO: Padronizar para minúsculas IGUAL ao frontend (admin.js linha 481)
-                m = m.toLowerCase();
+          // --- CORREÇÃO 1: Motivos ---
+          if (!isCanceled && !noPrazo) {
+            // INVERTIDO: Prioriza 'motivo_atraso' (categoria interna/dropdown) sobre 'justificativa' (texto livre)
+            // Isso alinha com o Dashboard que costuma mostrar categorias agrupadas
+            let m = op.motivo_atraso || op.justificativa_atraso || 'sem justificativa';
+            m = m.toString().trim();
 
-                motivosMap[m] = (motivosMap[m] || 0) + 1;
+            if (m === '-' || m === '' || m.toLowerCase() === 'null') {
+              m = 'sem justificativa';
             }
+            m = m.toLowerCase();
 
-            // Target Chart
-            if (!isCanceled && op.previsao_inicio_atendimento) {
-                const d = new Date(op.previsao_inicio_atendimento);
-                const mesKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-                if (!targetMap[mesKey]) targetMap[mesKey] = { cTotal:0, cOk:0, eTotal:0, eOk:0 };
+            motivosMap[m] = (motivosMap[m] || 0) + 1;
+          }
+
+          // --- CORREÇÃO 2: Target Chart (Datas) ---
+          // Usa PREVISAO, que é o correto para Target (Planejado vs Realizado)
+          if (!isCanceled && op.previsao_inicio_atendimento) {
+            const d = new Date(op.previsao_inicio_atendimento);
+            
+            // Validação simples para evitar anos absurdos (lixo no banco)
+            const year = d.getFullYear();
+            if (year >= 2023 && year <= 2030) { 
+                const mesKey = `${year}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+                
+                if (!targetMap[mesKey]) targetMap[mesKey] = { cTotal: 0, cOk: 0, eTotal: 0, eOk: 0 };
 
                 const tipo = (op.tipo_programacao || '').toLowerCase();
                 if (tipo.includes('colet') || tipo.includes('ova')) {
-                    targetMap[mesKey].cTotal++;
-                    if (noPrazo) targetMap[mesKey].cOk++;
+                  targetMap[mesKey].cTotal++;
+                  if (noPrazo) targetMap[mesKey].cOk++;
                 } else {
-                    targetMap[mesKey].eTotal++;
-                    if (noPrazo) targetMap[mesKey].eOk++;
+                  targetMap[mesKey].eTotal++;
+                  if (noPrazo) targetMap[mesKey].eOk++;
                 }
             }
+          }
         });
 
         allOperacoes = allOperacoes.concat(data);
         if (data.length < pageSize) hasMore = false;
         currentPage++;
-        if(currentPage > 200) hasMore = false; 
+        if (currentPage > 200) hasMore = false;
       }
     }
 
@@ -1412,48 +1417,57 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
     const no_prazo = [], ate_1h = [], de_2_a_5h = [], de_5_a_10h = [], mais_10h = [];
 
     validOps.forEach(op => {
-        const delay = calcularAtrasoLocal(op);
-        if (delay <= 0) no_prazo.push(op);
-        else if (delay <= 60) ate_1h.push(op);
-        else if (delay <= 300) de_2_a_5h.push(op);
-        else if (delay <= 600) de_5_a_10h.push(op);
-        else mais_10h.push(op);
+      const delay = calcularAtrasoLocal(op);
+      if (delay <= 0) no_prazo.push(op);
+      else if (delay <= 60) ate_1h.push(op);
+      else if (delay <= 300) de_2_a_5h.push(op);
+      else if (delay <= 600) de_5_a_10h.push(op);
+      else mais_10h.push(op);
     });
 
     const calcPct = (parte, todo) => ((parte / todo) * 100).toFixed(1);
 
+    // --- CORREÇÃO 3: Cálculo do Target (Evitar 100% falso) ---
     const targetChartData = Object.keys(targetMap).sort().map(key => {
-        const d = targetMap[key];
-        return {
-            mes: key,
-            coletaPct: d.cTotal > 0 ? calcPct(d.cOk, d.cTotal) : '100.0',
-            entregaPct: d.eTotal > 0 ? calcPct(d.eOk, d.eTotal) : '100.0'
-        };
+      const d = targetMap[key];
+      return {
+        mes: key,
+        // SE não tem total, a porcentagem é 0.0, e não 100.0
+        coletaPct: d.cTotal > 0 ? calcPct(d.cOk, d.cTotal) : '0.0',
+        entregaPct: d.eTotal > 0 ? calcPct(d.eOk, d.eTotal) : '0.0'
+      };
     });
 
     const motivosArray = Object.entries(motivosMap)
-        .map(([motivo, quantidade]) => ({ 
-            motivo, 
-            quantidade, 
-            percentual: calcPct(quantidade, baseTotal) 
-        }))
-        .sort((a, b) => b.quantidade - a.quantidade)
-        .slice(0, 12); // Top 12
+      .map(([motivo, quantidade]) => ({
+        motivo,
+        quantidade,
+        percentual: calcPct(quantidade, baseTotal)
+      }))
+      .sort((a, b) => b.quantidade - a.quantidade)
+      .slice(0, 12);
 
-    // ✅ CORREÇÃO: Mapeamento completo (TODAS operações + embarcador)
-    const simpleMap = (arr) => arr.map(o => ({ 
-        id: o.id, 
-        booking: o.booking, 
-        container: o.containers,
-        embarcador_nome: o.embarcadores?.nome_principal || 'Não informado',
-        motivo_atraso: o.justificativa_atraso || o.motivo_atraso 
+    const simpleMap = (arr) => arr.map(o => ({
+      id: o.id,
+      booking: o.booking,
+      container: o.containers,
+      embarcador_nome: o.embarcadores?.nome_principal || 'Não informado',
+      motivo_atraso: o.justificativa_atraso || o.motivo_atraso,
+      porto_operacao: o.pol || o.pod || null, // Adicionado para garantir detalhe no modal
+      tipo_programacao: o.tipo_programacao,
+      previsao_inicio_atendimento: o.previsao_inicio_atendimento
     }));
+
+    // Cálculos explícitos para os Donuts (facilita o front)
+    const coletasNoPrazo = coletas.filter(o => calcularAtrasoLocal(o) <= 0).length;
+    const entregasNoPrazo = entregas.filter(o => calcularAtrasoLocal(o) <= 0).length;
 
     return res.json({
       success: true,
       data: {
         resumo: {
           total_operacoes: totalExibido,
+          canceladas: allOperacoes.filter(op => (op.status_operacao || '').toLowerCase().includes('cancelad')).length,
           total_coletas: coletas.length,
           total_entregas: entregas.length
         },
@@ -1465,14 +1479,16 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
           mais_10h: { quantidade: mais_10h.length, percentual: calcPct(mais_10h.length, baseTotal), operacoes: simpleMap(mais_10h) }
         },
         pontualidade_coletas: {
-            media: coletas.length > 0 ? calcPct(coletas.filter(o => calcularAtrasoLocal(o)<=0).length, coletas.length) : '0.0',
-            total: coletas.length,
-            no_prazo: coletas.filter(o => calcularAtrasoLocal(o)<=0).length
+          media: coletas.length > 0 ? calcPct(coletasNoPrazo, coletas.length) : '0.0',
+          total: coletas.length,
+          no_prazo: coletasNoPrazo,
+          atrasado: coletas.length - coletasNoPrazo // Campo explícito para o gráfico
         },
         pontualidade_entregas: {
-            media: entregas.length > 0 ? calcPct(entregas.filter(o => calcularAtrasoLocal(o)<=0).length, entregas.length) : '0.0',
-            total: entregas.length,
-            no_prazo: entregas.filter(o => calcularAtrasoLocal(o)<=0).length
+          media: entregas.length > 0 ? calcPct(entregasNoPrazo, entregas.length) : '0.0',
+          total: entregas.length,
+          no_prazo: entregasNoPrazo,
+          atrasado: entregas.length - entregasNoPrazo // Campo explícito para o gráfico
         },
         motivos_atraso: motivosArray,
         target_chart: targetChartData
@@ -1492,17 +1508,17 @@ app.put("/admin/ferrovia/operacao/:id/mover-terminal", verifyTokenAndAttachUser,
     // Atualiza status e data de entrada
     const { data, error } = await supabase
       .from('operacoes_ferrovia')
-      .update({ 
-        status: 'terminal_apoio', 
-        dt_entrada_terminal_apoio: new Date().toISOString() 
+      .update({
+        status: 'terminal_apoio',
+        dt_entrada_terminal_apoio: new Date().toISOString()
       })
       .eq('id', id)
       .select();
-    
-    if(error) throw error;
+
+    if (error) throw error;
     res.json({ success: true, message: "Movido para Terminal de Apoio", data });
   } catch (e) {
-    console.error(e); res.status(500).json({success: false, error: e.message});
+    console.error(e); res.status(500).json({ success: false, error: e.message });
   }
 });
 
@@ -1512,35 +1528,35 @@ app.put("/admin/ferrovia/operacao/:id/mover-entrega", verifyTokenAndAttachUser, 
     const id = req.params.id;
     const { data, error } = await supabase
       .from('operacoes_ferrovia')
-      .update({ 
-        status: 'aguardando_entrega', 
-        dt_saida_terminal_apoio: new Date().toISOString() 
+      .update({
+        status: 'aguardando_entrega',
+        dt_saida_terminal_apoio: new Date().toISOString()
       })
       .eq('id', id)
       .select();
-      
-    if(error) throw error;
+
+    if (error) throw error;
     res.json({ success: true, message: "Saiu para Entrega", data });
   } catch (e) {
-    console.error(e); res.status(500).json({success: false, error: e.message});
+    console.error(e); res.status(500).json({ success: false, error: e.message });
   }
 });
 
 // server.js (Adicionar no final)
 
 app.put("/admin/ferrovia/operacao/:id/chegada-porto", verifyTokenAndAttachUser, requireAdmin, async (req, res) => {
-    const id = req.params.id;
-    // Atualiza status e data real de chegada no porto
-    const { error } = await supabase
-        .from('operacoes_ferrovia')
-        .update({ 
-            status: 'no_porto', 
-            dt_chegada_porto: new Date().toISOString() 
-        })
-        .eq('id', id);
-        
-    if(error) return res.status(500).json({success:false, error: error.message});
-    res.json({success:true});
+  const id = req.params.id;
+  // Atualiza status e data real de chegada no porto
+  const { error } = await supabase
+    .from('operacoes_ferrovia')
+    .update({
+      status: 'no_porto',
+      dt_chegada_porto: new Date().toISOString()
+    })
+    .eq('id', id);
+
+  if (error) return res.status(500).json({ success: false, error: error.message });
+  res.json({ success: true });
 });
 
 // Dar Baixa (Finalizar)
@@ -1549,17 +1565,112 @@ app.put("/admin/ferrovia/operacao/:id/baixa", verifyTokenAndAttachUser, requireA
     const id = req.params.id;
     const { data, error } = await supabase
       .from('operacoes_ferrovia')
-      .update({ 
-        status: 'entregue', 
-        dt_entrega: new Date().toISOString() 
+      .update({
+        status: 'entregue',
+        dt_entrega: new Date().toISOString()
       })
       .eq('id', id)
       .select();
 
-    if(error) throw error;
+    if (error) throw error;
     res.json({ success: true, message: "Operação Finalizada", data });
   } catch (e) {
-    console.error(e); res.status(500).json({success: false, error: e.message});
+    console.error(e); res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Endpoint: Editar operação
+app.put('/admin/ferrovia/operacao/:id', verifyTokenAndAttachUser, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    // Remover campos que não devem ser atualizados
+    delete updates.id;
+    delete updates.created_at;
+    
+    // Converter datas se necessário
+    const dateFields = ['dt_previsao_chegada_porto', 'dt_chegada_porto', 
+                       'dt_entrada_terminal_apoio', 'dt_saida_terminal_apoio', 'dt_entrega'];
+    
+    dateFields.forEach(field => {
+      if (updates[field] && !updates[field].includes('T')) {
+        updates[field] = new Date(updates[field]).toISOString();
+      }
+    });
+    
+    const { data, error } = await supabase
+      .from('operacoes_ferrovia')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint: Voltar passo
+app.put('/admin/ferrovia/operacao/:id/voltar-passo', verifyTokenAndAttachUser, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.query;
+    
+    const updates = { status, updated_at: new Date().toISOString() };
+    
+    // Limpar datas posteriores ao status
+    if (status === 'aguardando_chegada') {
+      updates.dt_chegada_porto = null;
+      updates.dt_entrada_terminal_apoio = null;
+      updates.dt_saida_terminal_apoio = null;
+      updates.dt_entrega = null;
+    } else if (status === 'no_porto') {
+      updates.dt_entrada_terminal_apoio = null;
+      updates.dt_saida_terminal_apoio = null;
+      updates.dt_entrega = null;
+    } else if (status === 'terminal_apoio') {
+      updates.dt_saida_terminal_apoio = null;
+      updates.dt_entrega = null;
+    } else if (status === 'aguardando_entrega') {
+      updates.dt_entrega = null;
+    }
+    
+    const { data, error } = await supabase
+      .from('operacoes_ferrovia')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint: Limpar operações
+app.delete('/admin/ferrovia/limpar', verifyTokenAndAttachUser, requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('operacoes_ferrovia')
+      .delete()
+      .neq('id', 0); // Deleta todos os registros
+    
+    if (error) throw error;
+    
+    res.json({ 
+      success: true, 
+      deleted: data?.length || 0,
+      message: 'Todas operações foram excluídas' 
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -1667,7 +1778,7 @@ app.get("/admin/ferrovia/operacoes_detalhe", verifyTokenAndAttachUser, requireAd
     // Calcula dias no servidor para facilitar
     const items = data.map(op => {
       const hoje = new Date();
-      
+
       // Dias no Porto
       let diasPorto = 0;
       if (op.dt_chegada_porto) {
@@ -1692,9 +1803,9 @@ app.get("/admin/ferrovia/operacoes_detalhe", verifyTokenAndAttachUser, requireAd
     });
 
     res.json({ success: true, items });
-  } catch (e) { 
-    console.error('Erro detalhe ferrovia:', e); 
-    res.status(500).json({ success: false, error: "server_error_list_detalhe" }); 
+  } catch (e) {
+    console.error('Erro detalhe ferrovia:', e);
+    res.status(500).json({ success: false, error: "server_error_list_detalhe" });
   }
 });
 
