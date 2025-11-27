@@ -224,15 +224,28 @@ function parseDateBR(str) {
 }
 
 // ISO -> "dd/mm/aaaa hh:mm"
+// No admin.js, substitua a função isoToBR por esta:
+
 function isoToBR(isoVal) {
   if (!isoVal) return "";
+  
+  // Cria a data
   const d = new Date(isoVal);
   if (isNaN(d.getTime())) return isoVal;
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const HH = String(d.getHours()).padStart(2, "0");
-  const MM = String(d.getMinutes()).padStart(2, "0");
+
+  // --- O TRUQUE DAS 3 HORAS ---
+  // Pega a diferença de fuso (ex: 180 minutos no Brasil) e soma de volta
+  // Isso cancela a conversão automática do navegador
+  const userTimezoneOffset = d.getTimezoneOffset() * 60000;
+  const normalized = new Date(d.getTime() + userTimezoneOffset);
+
+  // Formata
+  const dd = String(normalized.getDate()).padStart(2, "0");
+  const mm = String(normalized.getMonth() + 1).padStart(2, "0");
+  const yyyy = normalized.getFullYear();
+  const HH = String(normalized.getHours()).padStart(2, "0");
+  const MM = String(normalized.getMinutes()).padStart(2, "0");
+  
   return `${dd}/${mm}/${yyyy} ${HH}:${MM}`;
 }
 
@@ -350,7 +363,7 @@ function normalizeOp(raw) {
   const tipoProgRaw = raw.tipo_programacao || raw.TipoOperacao || raw.status_operacao || "";
 
   // ✅ ADICIONAR campos necessários para calculateDelayInMinutes
-  const situacao = raw.SituacaoProgramacao || raw.situacao || raw.status || "";
+  const situacao = raw.SituacaoProgramacao || raw.situacao || raw.status || raw.status_operacao || "";
 
   return {
     Booking: booking,
@@ -408,12 +421,13 @@ function opMatchesFilters(op) {
   // 0 = no prazo (ou sem dados), >0 = atrasado
   const isLate = delayMin > 0;
   const isOnTime = delayMin === 0 && op.DataProgramada;
+  const statusText = [op.TipoOperacao, op.SituacaoProgramacao, op.StatusOperacao].join(' ').toLowerCase();
   const isCanceled = /cancel/i.test(op.TipoOperacao || "") ||
     /cancel/i.test(op.SituacaoProgramacao || "");
 
   if (state.filters.status === "ontime" && !isOnTime) return false;
   if (state.filters.status === "late" && !isLate) return false;
-  if (state.filters.status === "canceled" && !isCanceled) return false;
+  if (state.filters.status === "canceled" && (isCanceled || !isLate)) return false;
 
   if (state.filters.range !== "all") {
     const progDt = parseDateBR(op.DataProgramada);

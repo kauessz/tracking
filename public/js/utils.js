@@ -319,6 +319,25 @@ ${htmlBody}
   return emlContent;
 }
 
+export function formatDate(isoStr) {
+    if (!isoStr) return '-';
+    // Cria o objeto data
+    const d = new Date(isoStr);
+    
+    // Verifica se é data válida
+    if (isNaN(d.getTime())) return '-';
+
+    // Pega o deslocamento do fuso horário do usuário (em minutos) e converte para ms
+    // Isso "cancela" a conversão automática do navegador se a data veio como UTC mas era pra ser local
+    const userTimezoneOffset = d.getTimezoneOffset() * 60000;
+    const normalized = new Date(d.getTime() + userTimezoneOffset);
+
+    return normalized.toLocaleString('pt-BR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
+}
+
 export function downloadEML(emlContent, filename = "alerta-atrasos.eml") {
   const blob = new Blob([emlContent], { type: "message/rfc822" });
   const url = URL.createObjectURL(blob);

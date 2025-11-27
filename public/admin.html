@@ -90,11 +90,26 @@
       line-height: 1;
     }
 
-    .kpi-gradient-0 { background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); } /* Marítimo */
-    .kpi-gradient-1 { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .kpi-gradient-2 { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    .kpi-gradient-3 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    .kpi-gradient-4 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    .kpi-gradient-0 {
+      background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+    }
+
+    /* Marítimo */
+    .kpi-gradient-1 {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .kpi-gradient-2 {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .kpi-gradient-3 {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .kpi-gradient-4 {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
 
     .table {
       width: 100%;
@@ -253,7 +268,8 @@
             </div>
             <div>
               <label class="block text-sm font-semibold mb-2">Busca</label>
-              <input id="filter-booking" type="text" placeholder="Booking/Container/Porto" class="w-full input-modern border border-gray-300 p-3" />
+              <input id="filter-booking" type="text" placeholder="Booking/Container/Porto"
+                class="w-full input-modern border border-gray-300 p-3" />
             </div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -262,15 +278,23 @@
               <input id="filter-date" type="date" class="w-full input-modern border border-gray-300 p-3" />
             </div>
             <div class="flex items-end">
-              <button id="clear-filters" class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">Limpar Filtros</button>
+              <button id="clear-filters"
+                class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">Limpar
+                Filtros</button>
             </div>
           </div>
           <div class="mb-6">
             <h3 class="text-sm font-semibold text-gray-800 mb-3">Ações</h3>
             <div class="flex flex-wrap gap-3">
-              <button id="send-email-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">📧 Enviar E-mail ao Cliente</button>
-              <button id="copy-email-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">📝 Criar E-mail</button>
-              <button id="open-diary-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">📖 Abrir Diário de Bordo</button>
+              <button id="send-email-btn"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">📧 Enviar
+                E-mail ao Cliente</button>
+              <button id="copy-email-btn"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">📝
+                Criar E-mail</button>
+              <button id="open-diary-btn"
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">📖
+                Abrir Diário de Bordo</button>
             </div>
           </div>
           <div class="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-xl">
@@ -291,11 +315,16 @@
             <table class="min-w-full divide-y divide-gray-200 table">
               <thead id="results-table-head" class="bg-gray-50">
                 <tr class="text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                  <th data-sort="Booking" class="px-6 py-4 sortable-header">Booking <span class="sort-indicator"></span></th>
-                  <th data-sort="Cliente" class="px-6 py-4 sortable-header">Embarcador <span class="sort-indicator"></span></th>
-                  <th data-sort="PortoOperacao" class="px-6 py-4 sortable-header">Porto <span class="sort-indicator"></span></th>
-                  <th data-sort="DataProgramada" class="px-6 py-4 sortable-header">Previsão Início <span class="sort-indicator"></span></th>
-                  <th data-sort="DataChegada" class="px-6 py-4 sortable-header">Início Execução <span class="sort-indicator"></span></th>
+                  <th data-sort="Booking" class="px-6 py-4 sortable-header">Booking <span class="sort-indicator"></span>
+                  </th>
+                  <th data-sort="Cliente" class="px-6 py-4 sortable-header">Embarcador <span
+                      class="sort-indicator"></span></th>
+                  <th data-sort="PortoOperacao" class="px-6 py-4 sortable-header">Porto <span
+                      class="sort-indicator"></span></th>
+                  <th data-sort="DataProgramada" class="px-6 py-4 sortable-header">Previsão Início <span
+                      class="sort-indicator"></span></th>
+                  <th data-sort="DataChegada" class="px-6 py-4 sortable-header">Início Execução <span
+                      class="sort-indicator"></span></th>
                   <th class="px-6 py-4 text-center">Atraso</th>
                   <th class="px-6 py-4">Motivo do Atraso</th>
                 </tr>
@@ -306,18 +335,26 @@
           <div class="flex justify-between items-center p-4 bg-gray-50 rounded-xl">
             <div class="text-sm text-gray-600"><span id="showing-info-bottom">Mostrando 0 de 0</span></div>
             <div class="flex items-center gap-3">
-              <button id="prev-page" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg btn-modern font-semibold">← Anterior</button>
+              <button id="prev-page"
+                class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg btn-modern font-semibold">←
+                Anterior</button>
               <span id="current-page-display" class="text-sm font-medium">Página 1</span>
-              <button id="next-page" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg btn-modern font-semibold">Proximo → </button>
+              <button id="next-page"
+                class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg btn-modern font-semibold">Proximo →
+              </button>
             </div>
           </div>
           <section id="email-preview" class="hidden mt-6 p-6 rounded-xl bg-indigo-50 border border-indigo-200">
             <div class="flex items-start justify-between mb-4">
               <h3 class="text-lg font-bold text-indigo-900">Prévia de E-mail ao Cliente</h3>
-              <button id="close-email-preview" class="text-sm text-indigo-700 hover:text-indigo-900 font-semibold underline">Fechar</button>
+              <button id="close-email-preview"
+                class="text-sm text-indigo-700 hover:text-indigo-900 font-semibold underline">Fechar</button>
             </div>
-            <textarea id="email-draft" class="w-full border border-indigo-300 rounded-xl p-4 text-xs font-mono text-gray-800 bg-white min-h-[220px]" readonly></textarea>
-            <p class="text-xs text-gray-500 mt-3">Copie e cole no Outlook / Gmail. O conteúdo inclui uma tabela com as operações em atraso.</p>
+            <textarea id="email-draft"
+              class="w-full border border-indigo-300 rounded-xl p-4 text-xs font-mono text-gray-800 bg-white min-h-[220px]"
+              readonly></textarea>
+            <p class="text-xs text-gray-500 mt-3">Copie e cole no Outlook / Gmail. O conteúdo inclui uma tabela com as
+              operações em atraso.</p>
           </section>
         </div>
       </section>
@@ -329,7 +366,8 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label class="block text-sm font-semibold mb-2">Booking</label>
-                <input id="ocorrencias-filter-booking" type="text" placeholder="P10482561" class="w-full input-modern border border-gray-300 p-3" />
+                <input id="ocorrencias-filter-booking" type="text" placeholder="P10482561"
+                  class="w-full input-modern border border-gray-300 p-3" />
               </div>
               <div>
                 <label class="block text-sm font-semibold mb-2">Tipo</label>
@@ -343,19 +381,25 @@
                 </select>
               </div>
               <div class="flex items-end">
-                <button id="ocorrencias-search-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">🔍 Buscar</button>
+                <button id="ocorrencias-search-btn"
+                  class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-xl btn-modern font-semibold">🔍
+                  Buscar</button>
               </div>
             </div>
           </div>
           <div id="ocorrencias-list" class="space-y-3">
-            <p class="text-gray-500 text-center py-8">Nenhuma ocorrência encontrada. Use os filtros acima para buscar.</p>
+            <p class="text-gray-500 text-center py-8">Nenhuma ocorrência encontrada. Use os filtros acima para buscar.
+            </p>
           </div>
           <div class="mt-6 p-4 bg-gray-50 rounded-xl">
             <h3 class="text-sm font-semibold text-gray-800 mb-3">Ações com Ocorrências</h3>
             <div class="flex gap-3">
-              <button id="ocorrencias-gerar-eml-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl btn-modern font-semibold">📧 Gerar E-mail (EML) de Ocorrências</button>
+              <button id="ocorrencias-gerar-eml-btn"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl btn-modern font-semibold">📧 Gerar
+                E-mail (EML) de Ocorrências</button>
             </div>
-            <p class="text-xs text-gray-500 mt-2">Gera um arquivo EML com as ocorrências filtradas que pode ser aberto no Outlook.</p>
+            <p class="text-xs text-gray-500 mt-2">Gera um arquivo EML com as ocorrências filtradas que pode ser aberto
+              no Outlook.</p>
           </div>
         </div>
       </section>
@@ -365,13 +409,16 @@
           <h2 class="text-2xl font-bold text-gray-900 mb-4">Upload de Dados de Rastreamento</h2>
           <p class="text-gray-600 mb-6">Selecione um arquivo Excel (.xlsx, .xls) ou CSV (.csv) para sincronizar.</p>
           <div class="mb-6">
-            <input id="upload-file" type="file" accept=".xlsx,.xls,.csv" class="block w-full text-sm text-gray-600 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 file:cursor-pointer cursor-pointer" />
+            <input id="upload-file" type="file" accept=".xlsx,.xls,.csv"
+              class="block w-full text-sm text-gray-600 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 file:cursor-pointer cursor-pointer" />
           </div>
           <div id="upload-status" class="text-sm text-gray-600 mb-6"></div>
           <hr class="my-8 border-gray-200">
           <h3 class="text-xl font-bold text-gray-900 mb-4">Gestão de Dados</h3>
           <p class="text-gray-600 mb-6">Use para limpar todas as programações existentes (irreversível).</p>
-          <button id="clear-data-btn" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-xl btn-modern">🗑️ Limpar Dados</button>
+          <button id="clear-data-btn"
+            class="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-xl btn-modern">🗑️ Limpar
+            Dados</button>
         </div>
       </section>
 
@@ -405,34 +452,41 @@
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Cliente/Embarcador(es)</label>
-              <select id="analytics-embarcador" multiple class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500">
+              <select id="analytics-embarcador" multiple
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500">
                 <option value="">Selecione um ou mais embarcadores</option>
               </select>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Data Início</label>
-              <input type="date" id="analytics-data-inicio" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500">
+              <input type="date" id="analytics-data-inicio"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500">
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Data Fim</label>
-              <input type="date" id="analytics-data-fim" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500">
+              <input type="date" id="analytics-data-fim"
+                class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500">
             </div>
           </div>
           <div class="mt-4 flex gap-3">
-            <button id="analytics-buscar-btn" class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg">
+            <button id="analytics-buscar-btn"
+              class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg">
               🔍 Buscar
             </button>
-            <button id="analytics-limpar-btn" class="bg-gray-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-600 transition-all">
+            <button id="analytics-limpar-btn"
+              class="bg-gray-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-600 transition-all">
               🗑️ Limpar Filtros
             </button>
           </div>
         </div>
 
         <div class="flex gap-3 mb-6">
-          <button id="export-pdf-btn" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2 btn-modern shadow-lg hover:shadow-xl">
+          <button id="export-pdf-btn"
+            class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2 btn-modern shadow-lg hover:shadow-xl">
             📄 Exportar PDF
           </button>
-          <button id="export-ppt-btn" class="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2 btn-modern shadow-lg hover:shadow-xl">
+          <button id="export-ppt-btn"
+            class="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2 btn-modern shadow-lg hover:shadow-xl">
             📊 Exportar PowerPoint
           </button>
         </div>
@@ -455,35 +509,40 @@
         <div class="glass-card p-6 mb-6">
           <h3 class="text-lg font-semibold text-gray-700 mb-4">⏱️ Pontualidade das Operações</h3>
           <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div id="pont-card-no-prazo" class="analytics-card cursor-pointer hover:shadow-xl transition-all" data-categoria="no_prazo" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+            <div id="pont-card-no-prazo" class="analytics-card cursor-pointer hover:shadow-xl transition-all"
+              data-categoria="no_prazo" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
               <div class="text-white p-4 rounded-lg">
                 <div class="text-sm opacity-90 mb-1">✅ No Prazo</div>
                 <div class="text-3xl font-bold" id="pont-no-prazo-qtd">0</div>
                 <div class="text-sm opacity-90 mt-1" id="pont-no-prazo-pct">0%</div>
               </div>
             </div>
-            <div id="pont-card-ate1h" class="analytics-card cursor-pointer hover:shadow-xl transition-all" data-categoria="ate_1h" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+            <div id="pont-card-ate1h" class="analytics-card cursor-pointer hover:shadow-xl transition-all"
+              data-categoria="ate_1h" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
               <div class="text-white p-4 rounded-lg">
                 <div class="text-sm opacity-90 mb-1">⚡ Até 1h</div>
                 <div class="text-3xl font-bold" id="pont-ate1h-qtd">0</div>
                 <div class="text-sm opacity-90 mt-1" id="pont-ate1h-pct">0%</div>
               </div>
             </div>
-            <div id="pont-card-2a5h" class="analytics-card cursor-pointer hover:shadow-xl transition-all" data-categoria="de_2_a_5h" style="background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);">
+            <div id="pont-card-2a5h" class="analytics-card cursor-pointer hover:shadow-xl transition-all"
+              data-categoria="de_2_a_5h" style="background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);">
               <div class="text-white p-4 rounded-lg">
                 <div class="text-sm opacity-90 mb-1">⚠️ 2-5h</div>
                 <div class="text-3xl font-bold" id="pont-2a5h-qtd">0</div>
                 <div class="text-sm opacity-90 mt-1" id="pont-2a5h-pct">0%</div>
               </div>
             </div>
-            <div id="pont-card-5a10h" class="analytics-card cursor-pointer hover:shadow-xl transition-all" data-categoria="de_5_a_10h" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <div id="pont-card-5a10h" class="analytics-card cursor-pointer hover:shadow-xl transition-all"
+              data-categoria="de_5_a_10h" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
               <div class="text-white p-4 rounded-lg">
                 <div class="text-sm opacity-90 mb-1">🔶 5-10h</div>
                 <div class="text-3xl font-bold" id="pont-5a10h-qtd">0</div>
                 <div class="text-sm opacity-90 mt-1" id="pont-5a10h-pct">0%</div>
               </div>
             </div>
-            <div id="pont-card-mais10h" class="analytics-card cursor-pointer hover:shadow-xl transition-all" data-categoria="mais_10h" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);">
+            <div id="pont-card-mais10h" class="analytics-card cursor-pointer hover:shadow-xl transition-all"
+              data-categoria="mais_10h" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);">
               <div class="text-white p-4 rounded-lg">
                 <div class="text-sm opacity-90 mb-1">🔴 +10h</div>
                 <div class="text-3xl font-bold" id="pont-mais10h-qtd">0</div>
@@ -527,7 +586,7 @@
         <div class="glass-card p-6 mb-6">
           <h3 class="text-lg font-semibold text-gray-700 mb-4">📈 Motivos de Atraso</h3>
           <div style="position: relative; height: 400px; max-height: 400px;">
-            <canvas id="chart-motivos"></canvas> 
+            <canvas id="chart-motivos"></canvas>
           </div>
         </div>
 
@@ -535,7 +594,8 @@
           <h3 class="text-lg font-semibold text-gray-700 mb-4">
             🎯 Target de Operações Coletas e Entregas 2025
           </h3>
-          <div style="position: relative; height: 400px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+          <div
+            style="position: relative; height: 400px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
             <canvas id="target-chart"></canvas>
           </div>
         </div>
@@ -550,10 +610,15 @@
             <div class="bg-gray-50 p-4 rounded-xl">
               <h4 class="font-bold text-gray-700 mb-3 text-sm">📥 Importar Operações</h4>
               <div class="flex flex-col gap-3">
-                <input type="file" id="ferrovia-upload-file" accept=".xlsx,.xls" class="text-xs w-full bg-white border p-2 rounded" />
+                <input type="file" id="ferrovia-upload-file" accept=".xlsx,.xls"
+                  class="text-xs w-full bg-white border p-2 rounded" />
                 <div class="flex gap-2">
-                  <button id="ferrovia-download-modelo-ops-btn" class="bg-indigo-600 text-white px-3 py-2 rounded hover:bg-indigo-700 text-xs font-bold flex-1">📥 Modelo Ops</button>
-                  <button id="ferrovia-limpar-btn" class="bg-red-100 text-red-700 px-3 py-2 rounded hover:bg-red-200 text-xs font-bold">🗑️ Limpar Tudo</button>
+                  <button id="ferrovia-download-modelo-ops-btn"
+                    class="bg-indigo-600 text-white px-3 py-2 rounded hover:bg-indigo-700 text-xs font-bold flex-1">📥
+                    Modelo Ops</button>
+                  <button id="ferrovia-limpar-btn"
+                    class="bg-red-100 text-red-700 px-3 py-2 rounded hover:bg-red-200 text-xs font-bold">🗑️ Limpar
+                    Tudo</button>
                 </div>
               </div>
             </div>
@@ -561,40 +626,50 @@
             <div class="bg-gray-50 p-4 rounded-xl">
               <h4 class="font-bold text-gray-700 mb-3 text-sm">⚡ Prioridades e Relatórios</h4>
               <div class="flex flex-col gap-3">
-                 <div class="flex gap-2 items-center">
-                    <input type="file" id="ferrovia-upload-prioridades-file" accept=".xlsx,.xls" class="text-xs w-full bg-white border p-2 rounded" />
-                 </div>
-                 <div class="flex gap-2">
-                    <button id="ferrovia-download-modelo-prio-btn" class="bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700 text-xs font-bold flex-1">📥 Modelo Prio.</button>
-                    <button id="ferrovia-gerar-relatorio-btn" class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-xs font-bold flex-1">📄 Relatório</button>
-                 </div>
+                <div class="flex gap-2 items-center">
+                  <input type="file" id="ferrovia-upload-prioridades-file" accept=".xlsx,.xls"
+                    class="text-xs w-full bg-white border p-2 rounded" />
+                </div>
+                <div class="flex gap-2">
+                  <button id="ferrovia-download-modelo-prio-btn"
+                    class="bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700 text-xs font-bold flex-1">📥
+                    Modelo Prio.</button>
+                  <button id="ferrovia-gerar-relatorio-btn"
+                    class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-xs font-bold flex-1">📄
+                    Relatório</button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-          <div class="kpi kpi-gradient-0 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1" id="kpi-ferrovia-maritimo">
+          <div class="kpi kpi-gradient-0 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1"
+            id="kpi-ferrovia-maritimo">
             <h3>Transporte Marítimo</h3>
             <p id="ferrovia-maritimo">0</p>
             <span class="text-sm opacity-90">aguardando chegada</span>
           </div>
-          <div class="kpi kpi-gradient-1 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1" id="kpi-ferrovia-porto">
+          <div class="kpi kpi-gradient-1 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1"
+            id="kpi-ferrovia-porto">
             <h3>No Porto</h3>
             <p id="ferrovia-no-porto">0</p>
             <span class="text-sm opacity-90">aguardando subida</span>
           </div>
-          <div class="kpi kpi-gradient-2 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1" id="kpi-ferrovia-terminal">
+          <div class="kpi kpi-gradient-2 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1"
+            id="kpi-ferrovia-terminal">
             <h3>Terminal Apoio</h3>
             <p id="ferrovia-terminal">0</p>
             <span class="text-sm opacity-90">em armazenagem</span>
           </div>
-          <div class="kpi kpi-gradient-3 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1" id="kpi-ferrovia-transito">
+          <div class="kpi kpi-gradient-3 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1"
+            id="kpi-ferrovia-transito">
             <h3>Em Entrega</h3>
             <p id="ferrovia-transito">0</p>
             <span class="text-sm opacity-90">saíram do terminal</span>
           </div>
-          <div class="kpi kpi-gradient-4 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1" id="kpi-ferrovia-entregues">
+          <div class="kpi kpi-gradient-4 cursor-pointer hover:opacity-90 transition transform hover:-translate-y-1"
+            id="kpi-ferrovia-entregues">
             <h3>Entregues</h3>
             <p id="ferrovia-entregues">0</p>
             <span class="text-sm opacity-90">finalizados</span>
@@ -606,7 +681,10 @@
           <div class="overflow-x-auto">
             <table class="w-full table">
               <thead>
-                <tr class="border-b bg-gray-50">
+                <tr class="border-b bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                  <th class="p-3 w-10 text-center">
+                    <input type="checkbox" id="check-all-ferrovia" onclick="ferroviaActions.toggleSelectAll()"
+                      class="cursor-pointer">
                   <th class="text-left p-3 text-sm font-semibold">Container</th>
                   <th class="text-left p-3 text-sm font-semibold">Booking</th>
                   <th class="text-left p-3 text-sm font-semibold">Embarcador</th>
@@ -627,10 +705,10 @@
 
   <script id="xlsx-lib" src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-  
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
@@ -650,10 +728,11 @@
   <script type="module" src="./js/ferrovia.js"></script>
   <script type="module" src="./js/admin.js"></script>
   <script type="module" src="./js/export-functions.js"></script>
-  
+
   <script type="module">
-    import * as U from "./js/utils.js"; 
+    import * as U from "./js/utils.js";
     window.calculateDelayInMinutes = U.calculateDelayInMinutes;
   </script>
 </body>
+
 </html>

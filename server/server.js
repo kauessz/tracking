@@ -67,16 +67,31 @@ function corsOptions(origin, callback) {
 }
 
 // converte "dd/mm/aaaa HH:mm" -> ISO
+// server.js - Substitua a função brToISO antiga por esta:
 function brToISO(dateStr) {
-  if (!dateStr || typeof dateStr !== "string") return null;
-  const [dmy, hm] = dateStr.split(" ");
-  if (!dmy || !hm) return null;
-  const [dd, mm, yyyy] = dmy.split("/");
-  const [HH, MM] = hm.split(":");
-  if (!dd || !mm || !yyyy || !HH || !MM) return null;
-  const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(HH), Number(MM), 0, 0);
-  if (isNaN(d.getTime())) return null;
-  return d.toISOString();
+  if (!dateStr) return null;
+  
+  // Se já for ISO ou Date object
+  if (typeof dateStr !== 'string') {
+     try { return new Date(dateStr).toISOString(); } catch(e) { return null; }
+  }
+
+  // Se for formato BR: dd/mm/aaaa hh:mm
+  const parts = dateStr.trim().split(' ');
+  const dmy = parts[0].split('/');
+  
+  if (dmy.length !== 3) return null; // Formato inválido
+
+  const hm = parts[1] ? parts[1].split(':') : ['00', '00'];
+  
+  // Cria a data usando string ISO direta para evitar conversão de fuso do navegador/servidor
+  // Formato: YYYY-MM-DDTHH:mm:00.000 (sem o Z no final, para ser Local Time)
+  const isoLocal = `${dmy[2]}-${dmy[1]}-${dmy[0]}T${hm[0]}:${hm[1]}:00.000`;
+  
+  return isoLocal; 
+  // Nota: Ao salvar sem o 'Z', o Postgres timestamp geralmente assume local. 
+  // Se seu banco for timestamptz, pode ser necessário adicionar '-03:00' ao final:
+  // return `${isoLocal}-03:00`; <--- Use esta linha se o banco for timestamptz
 }
 
 // ✅ NOVO: Formata data ISO para BR
@@ -1288,17 +1303,26 @@ Date: ${new Date().toUTCString()}
   }
 });
 
-// server.js — deixe APENAS essa versão
 function calcularAtrasoLocal(op) {
-  // Previsão obrigatória
+  // Previsão
   const prevStr = op.previsao_inicio_atendimento || op.dt_previsao_inicio_atendimento;
   if (!prevStr) return 0;
 
-  const prev = new Date(prevStr);
-  const real = op.dt_inicio_execucao ? new Date(op.dt_inicio_execucao) : new Date();
+  // Realizado
+  const execStr = op.dt_inicio_execucao;
+  
+  const prevDate = new Date(prevStr);
+  // Se não tem execução, usa AGORA.
+  // IMPORTANTE: new Date() no servidor é UTC. Isso geralmente bate com o ISO do banco.
+  const execDate = execStr ? new Date(execStr) : new Date();
 
-  const diffMin = Math.floor((real - prev) / 60000); // minutos
-  return diffMin > 0 ? diffMin : 0; // sem tolerância Manaus
+  if (isNaN(prevDate.getTime())) return 0;
+
+  const diffMs = execDate.getTime() - prevDate.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+
+  // Sem tolerância, sem negativos.
+  return diffMin > 0 ? diffMin : 0;
 }
 
 /* -------------------------------------------------
@@ -1310,7 +1334,7 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
 
     let totalAbsolutoBanco = 0;
 
-    // Contagem rápida total se não houver filtro
+    // Contagem rápida total (sem filtros)
     if (!embarcador_id && !data_inicio && !data_fim) {
       const { count } = await supabase.from("operacoes").select("*", { count: "exact", head: true });
       totalAbsolutoBanco = count;
@@ -1324,6 +1348,7 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
     const targetMap = {};
     const motivosMap = {};
 
+    // Loop de paginação para pegar todos os dados e processar no JS
     while (hasMore) {
       const from = currentPage * pageSize;
       const to = from + pageSize - 1;
@@ -1339,6 +1364,7 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
         .order("id", { ascending: false })
         .range(from, to);
 
+      // Filtros
       if (embarcador_id && embarcador_id !== 'all') {
         const ids = embarcador_id.split(',').map(id => parseInt(id.trim())).filter(Boolean);
         if (ids.length > 0) query = query.in("embarcador_id", ids);
@@ -1353,19 +1379,22 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
         hasMore = false;
       } else {
         data.forEach(op => {
+          // Normaliza status para evitar erro em nulos
           const status = (op.status_operacao || '').toLowerCase();
-          const isCanceled = status.includes('cancelad');
-          const atrasoCalc = calcularAtrasoLocal(op); // Função externa que você já tem
+          const isCanceled = status.includes('cancel'); // Regex simples para cancelado
+          
+          // ✅ CÁLCULO UNIFICADO
+          const atrasoCalc = calcularAtrasoLocal(op); 
           const noPrazo = atrasoCalc <= 0;
 
-          // --- CORREÇÃO 1: Motivos ---
+          // ✅ LÓGICA DE JUSTIFICATIVAS CORRIGIDA:
+          // Só conta se NÃO estiver cancelada E NÃO estiver no prazo (atraso > 0)
           if (!isCanceled && !noPrazo) {
-            // INVERTIDO: Prioriza 'motivo_atraso' (categoria interna/dropdown) sobre 'justificativa' (texto livre)
-            // Isso alinha com o Dashboard que costuma mostrar categorias agrupadas
+            // Prioriza motivo_atraso (categoria), depois justificativa (texto)
             let m = op.motivo_atraso || op.justificativa_atraso || 'sem justificativa';
             m = m.toString().trim();
 
-            if (m === '-' || m === '' || m.toLowerCase() === 'null') {
+            if (m === '-' || m === '' || m.toLowerCase() === 'null' || m === '0') {
               m = 'sem justificativa';
             }
             m = m.toLowerCase();
@@ -1373,13 +1402,11 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
             motivosMap[m] = (motivosMap[m] || 0) + 1;
           }
 
-          // --- CORREÇÃO 2: Target Chart (Datas) ---
-          // Usa PREVISAO, que é o correto para Target (Planejado vs Realizado)
+          // Target Chart (considera datas válidas e não canceladas)
           if (!isCanceled && op.previsao_inicio_atendimento) {
             const d = new Date(op.previsao_inicio_atendimento);
-            
-            // Validação simples para evitar anos absurdos (lixo no banco)
             const year = d.getFullYear();
+            // Filtra anos absurdos (lixo de banco)
             if (year >= 2023 && year <= 2030) { 
                 const mesKey = `${year}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
                 
@@ -1400,20 +1427,20 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
         allOperacoes = allOperacoes.concat(data);
         if (data.length < pageSize) hasMore = false;
         currentPage++;
-        if (currentPage > 200) hasMore = false;
+        if (currentPage > 200) hasMore = false; // Safety break
       }
     }
 
     const totalExibido = totalAbsolutoBanco > 0 ? totalAbsolutoBanco : allOperacoes.length;
 
-    // Filtros para os KPIs
-    const validOps = allOperacoes.filter(op => !((op.status_operacao || '').toLowerCase().includes('cancelad')));
+    // Filtros de arrays finais
+    const validOps = allOperacoes.filter(op => !((op.status_operacao || '').toLowerCase().includes('cancel')));
     const baseTotal = validOps.length > 0 ? validOps.length : 1;
 
     const coletas = validOps.filter(op => (op.tipo_programacao || '').toLowerCase().includes('colet'));
     const entregas = validOps.filter(op => (op.tipo_programacao || '').toLowerCase().includes('entreg'));
 
-    // Arrays para pontualidade
+    // Distribuição de Pontualidade
     const no_prazo = [], ate_1h = [], de_2_a_5h = [], de_5_a_10h = [], mais_10h = [];
 
     validOps.forEach(op => {
@@ -1427,38 +1454,38 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
 
     const calcPct = (parte, todo) => ((parte / todo) * 100).toFixed(1);
 
-    // --- CORREÇÃO 3: Cálculo do Target (Evitar 100% falso) ---
+    // Formatação dados Target Chart
     const targetChartData = Object.keys(targetMap).sort().map(key => {
       const d = targetMap[key];
       return {
         mes: key,
-        // SE não tem total, a porcentagem é 0.0, e não 100.0
         coletaPct: d.cTotal > 0 ? calcPct(d.cOk, d.cTotal) : '0.0',
         entregaPct: d.eTotal > 0 ? calcPct(d.eOk, d.eTotal) : '0.0'
       };
     });
 
+    // Formatação dados Motivos
     const motivosArray = Object.entries(motivosMap)
       .map(([motivo, quantidade]) => ({
         motivo,
         quantidade,
-        percentual: calcPct(quantidade, baseTotal)
+        percentual: calcPct(quantidade, baseTotal) // % sobre o total válido (não cancelado)
       }))
       .sort((a, b) => b.quantidade - a.quantidade)
       .slice(0, 12);
 
+    // Mapper simples para retorno de lista (usado nos modais de clique)
     const simpleMap = (arr) => arr.map(o => ({
       id: o.id,
       booking: o.booking,
       container: o.containers,
       embarcador_nome: o.embarcadores?.nome_principal || 'Não informado',
       motivo_atraso: o.justificativa_atraso || o.motivo_atraso,
-      porto_operacao: o.pol || o.pod || null, // Adicionado para garantir detalhe no modal
       tipo_programacao: o.tipo_programacao,
-      previsao_inicio_atendimento: o.previsao_inicio_atendimento
+      previsao_inicio_atendimento: o.previsao_inicio_atendimento,
+      porto_operacao: o.pol || o.pod // Corrigido para enviar null se não existir
     }));
 
-    // Cálculos explícitos para os Donuts (facilita o front)
     const coletasNoPrazo = coletas.filter(o => calcularAtrasoLocal(o) <= 0).length;
     const entregasNoPrazo = entregas.filter(o => calcularAtrasoLocal(o) <= 0).length;
 
@@ -1467,7 +1494,7 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
       data: {
         resumo: {
           total_operacoes: totalExibido,
-          canceladas: allOperacoes.filter(op => (op.status_operacao || '').toLowerCase().includes('cancelad')).length,
+          canceladas: allOperacoes.length - validOps.length,
           total_coletas: coletas.length,
           total_entregas: entregas.length
         },
@@ -1482,13 +1509,13 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
           media: coletas.length > 0 ? calcPct(coletasNoPrazo, coletas.length) : '0.0',
           total: coletas.length,
           no_prazo: coletasNoPrazo,
-          atrasado: coletas.length - coletasNoPrazo // Campo explícito para o gráfico
+          atrasado: coletas.length - coletasNoPrazo
         },
         pontualidade_entregas: {
           media: entregas.length > 0 ? calcPct(entregasNoPrazo, entregas.length) : '0.0',
           total: entregas.length,
           no_prazo: entregasNoPrazo,
-          atrasado: entregas.length - entregasNoPrazo // Campo explícito para o gráfico
+          atrasado: entregas.length - entregasNoPrazo
         },
         motivos_atraso: motivosArray,
         target_chart: targetChartData
@@ -1580,35 +1607,125 @@ app.put("/admin/ferrovia/operacao/:id/baixa", verifyTokenAndAttachUser, requireA
 });
 
 // Endpoint: Editar operação
-app.put('/admin/ferrovia/operacao/:id', verifyTokenAndAttachUser, requireAdmin, async (req, res) => {
+// server.js - Adicione estas rotas
+
+// 1. Rota de Edição (Correção)
+// server.js - Rota de Edição Ferrovia CORRIGIDA
+// ✅ ROTA DE EDIÇÃO BLINDADA (Substitua a anterior)
+app.put('/admin/ferrovia/operacao/:id/editar', verifyTokenAndAttachUser, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const rawUpdates = req.body; // Recebe os dados brutos
+
+    console.log(`📝 Tentando editar operação ${id}. Dados recebidos:`, rawUpdates);
+
+    // 1. Filtra apenas os campos que existem no banco e limpa datas
+    const cleanUpdates = {};
     
-    // Remover campos que não devem ser atualizados
-    delete updates.id;
-    delete updates.created_at;
-    
-    // Converter datas se necessário
-    const dateFields = ['dt_previsao_chegada_porto', 'dt_chegada_porto', 
-                       'dt_entrada_terminal_apoio', 'dt_saida_terminal_apoio', 'dt_entrega'];
-    
-    dateFields.forEach(field => {
-      if (updates[field] && !updates[field].includes('T')) {
-        updates[field] = new Date(updates[field]).toISOString();
-      }
+    // Lista de campos permitidos para edição
+    const allowedFields = [
+        'container', 'booking', 'embarcador_nome', 
+        'dt_chegada_porto', 'dt_entrada_terminal_apoio', 
+        'dt_agendamento_entrega', 'dt_entrega', 'dt_saida_terminal_apoio'
+    ];
+
+    // Helper para limpar datas vazias
+    const cleanDate = (val) => {
+        if (!val || val === '' || val === 'undefined' || val === 'null') return null;
+        return val; // Assume formato ISO ou YYYY-MM-DDTHH:mm vindo do input
+    };
+
+    allowedFields.forEach(field => {
+        if (rawUpdates.hasOwnProperty(field)) {
+            const val = rawUpdates[field];
+            // Se for campo de data, limpa
+            if (field.startsWith('dt_')) {
+                cleanUpdates[field] = cleanDate(val);
+            } else {
+                cleanUpdates[field] = val;
+            }
+        }
     });
+
+    // 2. Atualiza status automaticamente baseado nas datas preenchidas
+    if (cleanUpdates.dt_entrega) cleanUpdates.status = 'entregue';
+    else if (cleanUpdates.dt_saida_terminal_apoio) cleanUpdates.status = 'aguardando_entrega'; // Saiu do terminal -> Vai pra entrega
+    else if (cleanUpdates.dt_agendamento_entrega) cleanUpdates.status = 'agendado';
+    else if (cleanUpdates.dt_entrada_terminal_apoio) cleanUpdates.status = 'terminal_apoio';
+    else if (cleanUpdates.dt_chegada_porto) cleanUpdates.status = 'no_porto';
+
+    // Adiciona timestamp de atualização
+    cleanUpdates.updated_at = new Date().toISOString();
+
+    console.log("💾 Dados limpos para salvar:", cleanUpdates);
+
+    // 3. Executa Update
+    const { data, error } = await supabase
+      .from('operacoes_ferrovia')
+      .update(cleanUpdates)
+      .eq('id', id)
+      .select();
+
+    if (error) {
+        console.error("❌ Erro Postgres:", error);
+        throw new Error(error.message); // Lança erro para cair no catch
+    }
+
+    res.json({ success: true, data });
+
+  } catch (err) {
+    console.error("❌ Erro fatal na rota de edição:", err);
+    // Retorna o erro exato para o front entender
+    res.status(500).json({ success: false, error: err.message || "Erro interno ao salvar edição" });
+  }
+});
+
+// 2. Rota de Agendamento de Entrega
+app.post('/admin/ferrovia/agendar-entrega', verifyTokenAndAttachUser, requireAdmin, async (req, res) => {
+  try {
+    const { id, data_agendamento } = req.body;
     
     const { data, error } = await supabase
       .from('operacoes_ferrovia')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
+      .update({ 
+        dt_agendamento_entrega: data_agendamento,
+        status: 'agendado', // Novo status
+        updated_at: new Date()
+      })
+      .eq('id', id);
+
     if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Rota de Ações em Massa (Checkbox)
+app.post('/admin/ferrovia/bulk-action', verifyTokenAndAttachUser, requireAdmin, async (req, res) => {
+  try {
+    const { ids, action, date } = req.body; // ids: [1, 2, 3], action: 'chegada_porto' | 'ida_terminal'
     
-    res.json({ success: true, data });
+    if (!ids || ids.length === 0) return res.status(400).json({error: 'Nenhum ID selecionado'});
+
+    let updates = {};
+    const now = date ? new Date(date).toISOString() : new Date().toISOString();
+
+    if (action === 'chegada_porto') {
+      updates = { status: 'no_porto', dt_chegada_porto: now };
+    } else if (action === 'ida_terminal') {
+      updates = { status: 'terminal_apoio', dt_entrada_terminal_apoio: now };
+    } else if (action === 'baixa_massa') {
+        updates = { status: 'entregue', dt_entrega: now };
+    }
+
+    const { error } = await supabase
+      .from('operacoes_ferrovia')
+      .update(updates)
+      .in('id', ids);
+
+    if (error) throw error;
+    res.json({ success: true, count: ids.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1837,6 +1954,7 @@ app.post('/admin/ferrovia/import', upload.single('file'),
         const dt_prev_chegada = lerData('Prev. Chegada Porto') || lerData('Previsão Chegada Porto');
         const dt_chegada = lerData('Data Chegada Porto');
         const dt_entrada_term = lerData('Data Entrada Terminal');
+        const dt_agendamento = lerData('Data Agendamento');
         const dt_saida_term = lerData('Data Saída Terminal');
         const dt_inicio_transito = lerData('Data Início Trânsito');
         const dt_prev_entrega = lerData('Prev. Entrega') || lerData('Previsão Entrega');
@@ -1847,7 +1965,9 @@ app.post('/admin/ferrovia/import', upload.single('file'),
 
         if (dt_entrega) {
           statusCalculado = 'entregue';
-        } else if (dt_inicio_transito || dt_saida_term) {
+        } else if (dt_agendamento) {statusCalculado = 'agendado';}
+
+        else if (dt_inicio_transito || dt_saida_term) {
           // Se saiu do terminal ou iniciou trânsito
           statusCalculado = 'em_transito';
         } else if (dt_entrada_term) {
