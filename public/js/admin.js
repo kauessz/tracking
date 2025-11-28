@@ -27,12 +27,14 @@ import {
 import { Toast, Loading, Parse, Format } from "./utilities.js";
 import { APP_CONFIG, getApiUrl } from "./config.js";
 import {
+  analyticsState,
   initAnalytics,
   carregarEmbarcadoresAnalytics,
   buscarAnalytics,
   setAuthTokenGetter,
 } from "./analytics.js";
 import { calculateDelayInMinutes } from "./utils.js";
+
 
 // ------------------------------------------------------
 // CONFIG
@@ -478,14 +480,52 @@ function applyFiltersAndSort() {
 }
 
 function buildKPIs(ops) {
+  // ✅ 1ª tentativa: usar os dados consolidados do backend (analytics)
+  // para manter Dashboard e Analytics com a MESMA contagem
+  if (
+    typeof analyticsState !== "undefined" &&
+    analyticsState &&
+    analyticsState.data &&
+    analyticsState.data.pontualidade_geral
+  ) {
+    const resumo = analyticsState.data.resumo || {};
+    const pont = analyticsState.data.pontualidade_geral;
+
+    const noPrazoQtd = Number(pont.no_prazo?.quantidade || 0);
+    const ate1hQtd   = Number(pont.ate_1h?.quantidade || 0);
+    const de2a5Qtd   = Number(pont.de_2_a_5h?.quantidade || 0);
+    const de5a10Qtd  = Number(pont.de_5_a_10h?.quantidade || 0);
+    const mais10Qtd  = Number(pont.mais_10h?.quantidade || 0);
+
+    const baseTotal = noPrazoQtd + ate1hQtd + de2a5Qtd + de5a10Qtd + mais10Qtd;
+    const lateCount = baseTotal - noPrazoQtd; // tudo que NÃO é "no prazo"
+
+    // total_operacoes já vem do backend (com canceladas)
+    let total = Number(resumo.total_operacoes || 0);
+    const canceladas = Number(resumo.canceladas || 0);
+
+    if (total > 0) {
+      total = total - canceladas; // remove canceladas
+    } else {
+      // fallback: soma das categorias de pontualidade
+      total = baseTotal;
+    }
+
+    const pctLate = baseTotal > 0 ? (lateCount / baseTotal) * 100 : 0;
+
+    return { total, lateCount, pctLate };
+  }
+
+  // 🔁 Fallback antigo (caso o analytics ainda não tenha sido carregado)
   const total = ops.length;
   const delays = ops.map((o) => calculateDelayInMinutes(o));
-  // ✅ Atrasado = delay > 0 (positivo)
   const lateOnly = delays.filter((m) => m !== null && m > 0);
   const lateCount = lateOnly.length;
   const pctLate = total > 0 ? (lateCount / total) * 100 : 0;
   return { total, lateCount, pctLate };
 }
+
+
 
 function groupLateByClient(ops) {
   const map = {};
@@ -501,14 +541,29 @@ function groupLateByClient(ops) {
 }
 
 function groupDelayReasons(ops, topN = 5) {
+  // ✅ 1ª tentativa: usar os motivos agregados pelo backend
+  // para o Dashboard ficar exatamente igual ao Analytics
+  if (
+    typeof analyticsState !== "undefined" &&
+    analyticsState &&
+    analyticsState.data &&
+    Array.isArray(analyticsState.data.motivos_atraso) &&
+    analyticsState.data.motivos_atraso.length > 0
+  ) {
+    return analyticsState.data.motivos_atraso
+      .slice(0, topN)
+      .map((m) => ({
+        reason: (m.motivo || "sem justificativa").toString().toLowerCase(),
+        count: Number(m.quantidade || 0),
+      }));
+  }
+
+  // 🔁 Fallback: cálculo local (caso analytics ainda não tenha sido carregado)
   const counts = {};
   for (const o of ops) {
     const dmin = calculateDelayInMinutes(o);
-    
-    // ✅ CORREÇÃO: Só conta se estiver ATRASADA (delay > 0)
-    if (dmin <= 0) continue;
+    if (dmin <= 0) continue; // só operações atrasadas
 
-    // ✅ Garante que exibe "sem justificativa" (lowercase)
     let reason = (o.JustificativaAtraso || "").trim().toLowerCase();
     if (!reason || reason === "-") {
       reason = "sem justificativa";
@@ -516,10 +571,12 @@ function groupDelayReasons(ops, topN = 5) {
 
     counts[reason] = (counts[reason] || 0) + 1;
   }
+
   const arr = Object.entries(counts).map(([reason, count]) => ({ reason, count }));
   arr.sort((a, b) => b.count - a.count);
   return arr.slice(0, topN);
 }
+
 
 // ------------------------------------------------------
 // TIMELINE (linha expandida da tabela)

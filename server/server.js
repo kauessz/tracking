@@ -1303,42 +1303,66 @@ Date: ${new Date().toUTCString()}
   }
 });
 
+/* -------------------------------------------------
+   1. FUNÇÃO DE CÁLCULO DE ATRASO (Espelhada no Frontend)
+------------------------------------------------- */
 function calcularAtrasoLocal(op) {
-  // Previsão
-  const prevStr = op.previsao_inicio_atendimento || op.dt_previsao_inicio_atendimento;
-  if (!prevStr) return 0;
-
-  // Realizado
-  const execStr = op.dt_inicio_execucao;
+  // 1. Verificação de Cancelamento (Regex insensível a maiúsculas)
+  const status = (op.status_operacao || '').toString();
+  const tipo = (op.tipo_programacao || '').toString();
   
+  // Se tiver "cancel" em qualquer lugar, ignoramos (atraso 0)
+  if (/cancel/i.test(status) || /cancel/i.test(tipo)) {
+    return 0; 
+  }
+
+  // 2. Determinar o Porto (Lógica POL vs POD para Manaus)
+  let porto = '';
+  const tipoLower = tipo.toLowerCase();
+  
+  if (tipoLower.includes('colet')) {
+    porto = op.pol;
+  } else if (tipoLower.includes('entreg')) {
+    porto = op.pod;
+  } else {
+    porto = op.pol || op.pod;
+  }
+  
+  porto = (porto || '').toLowerCase();
+
+  // 3. Obter Datas
+  const prevStr = op.previsao_inicio_atendimento || op.dt_previsao_inicio_atendimento;
+  if (!prevStr) return 0; // Sem previsão = No prazo
+
   const prevDate = new Date(prevStr);
-  // Se não tem execução, usa AGORA.
-  // IMPORTANTE: new Date() no servidor é UTC. Isso geralmente bate com o ISO do banco.
-  const execDate = execStr ? new Date(execStr) : new Date();
+  
+  // Se não iniciou, compara com AGORA.
+  const execDate = op.dt_inicio_execucao ? new Date(op.dt_inicio_execucao) : new Date();
 
-  if (isNaN(prevDate.getTime())) return 0;
+  // Segurança: Se a data for inválida (Parser falhou), retorna 0 (No Prazo)
+  // Isso alinha com o comportamento do Dashboard que ignora formatos estranhos
+  if (isNaN(prevDate.getTime()) || isNaN(execDate.getTime())) return 0;
 
+  // 4. Diferença em minutos
   const diffMs = execDate.getTime() - prevDate.getTime();
   const diffMin = Math.floor(diffMs / 60000);
 
-  // Sem tolerância, sem negativos.
-  return diffMin > 0 ? diffMin : 0;
+  // 5. Tolerância MANAUS (60min)
+  const ehManaus = porto.includes('manaus');
+  const toleranciaMin = ehManaus ? 60 : 0; 
+
+  // Subtrai a tolerância
+  const atrasoFinal = diffMin - toleranciaMin;
+
+  return atrasoFinal > 0 ? atrasoFinal : 0;
 }
 
 /* -------------------------------------------------
-   ✅ CORREÇÃO: ANALYTICS KPIs (Mantendo lógica original + Novos Gráficos)
+   2. ROTA ANALYTICS AJUSTADA (Normalização idêntica ao Dashboard)
 ------------------------------------------------- */
 app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (req, res) => {
   try {
     const { embarcador_id, data_inicio, data_fim } = req.query;
-
-    let totalAbsolutoBanco = 0;
-
-    // Contagem rápida total (sem filtros)
-    if (!embarcador_id && !data_inicio && !data_fim) {
-      const { count } = await supabase.from("operacoes").select("*", { count: "exact", head: true });
-      totalAbsolutoBanco = count;
-    }
 
     let allOperacoes = [];
     let currentPage = 0;
@@ -1348,7 +1372,8 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
     const targetMap = {};
     const motivosMap = {};
 
-    // Loop de paginação para pegar todos os dados e processar no JS
+    console.log("📊 Iniciando cálculo de Analytics (Modo Compatibilidade Dashboard)...");
+
     while (hasMore) {
       const from = currentPage * pageSize;
       const to = from + pageSize - 1;
@@ -1356,7 +1381,7 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
       let query = supabase
         .from("operacoes")
         .select(`
-          id, booking, containers, tipo_programacao,
+          id, booking, containers, tipo_programacao, pol, pod,
           previsao_inicio_atendimento, dt_inicio_execucao,
           embarcador_id, motivo_atraso, justificativa_atraso, status_operacao,
           embarcadores (nome_principal)
@@ -1364,7 +1389,6 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
         .order("id", { ascending: false })
         .range(from, to);
 
-      // Filtros
       if (embarcador_id && embarcador_id !== 'all') {
         const ids = embarcador_id.split(',').map(id => parseInt(id.trim())).filter(Boolean);
         if (ids.length > 0) query = query.in("embarcador_id", ids);
@@ -1379,41 +1403,49 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
         hasMore = false;
       } else {
         data.forEach(op => {
-          // Normaliza status para evitar erro em nulos
-          const status = (op.status_operacao || '').toLowerCase();
-          const isCanceled = status.includes('cancel'); // Regex simples para cancelado
+          // --- FILTRO DE CANCELADOS ---
+          const status = (op.status_operacao || '').toString();
+          const tipo = (op.tipo_programacao || '').toString();
           
-          // ✅ CÁLCULO UNIFICADO
+          if (/cancel/i.test(status) || /cancel/i.test(tipo)) {
+            return; // Ignora cancelados
+          }
+
+          allOperacoes.push(op);
+
+          // --- CÁLCULO DE ATRASO ---
           const atrasoCalc = calcularAtrasoLocal(op); 
           const noPrazo = atrasoCalc <= 0;
 
-          // ✅ LÓGICA DE JUSTIFICATIVAS CORRIGIDA:
-          // Só conta se NÃO estiver cancelada E NÃO estiver no prazo (atraso > 0)
-          if (!isCanceled && !noPrazo) {
-            // Prioriza motivo_atraso (categoria), depois justificativa (texto)
-            let m = op.motivo_atraso || op.justificativa_atraso || 'sem justificativa';
-            m = m.toString().trim();
-
-            if (m === '-' || m === '' || m.toLowerCase() === 'null' || m === '0') {
+          // --- MAPA DE MOTIVOS (Lógica Corrigida) ---
+          if (!noPrazo) {
+            // CORREÇÃO: Dashboard prioriza JustificativaAtraso.
+            // Aqui invertemos para pegar justificativa antes de motivo (categoria)
+            // para bater com o gráfico visual do front.
+            let m = op.justificativa_atraso || op.motivo_atraso || '';
+            
+            // Normalização idêntica ao admin.js
+            m = m.toString().trim().toLowerCase();
+            
+            // Lista de exclusão expandida para capturar o que vira "sem justificativa"
+            if (!m || m === '-' || m === 'null' || m === 'undefined' || m === '0' || m === '') {
               m = 'sem justificativa';
             }
-            m = m.toLowerCase();
-
+            
             motivosMap[m] = (motivosMap[m] || 0) + 1;
           }
 
-          // Target Chart (considera datas válidas e não canceladas)
-          if (!isCanceled && op.previsao_inicio_atendimento) {
+          // --- CHART TARGET ---
+          if (op.previsao_inicio_atendimento) {
             const d = new Date(op.previsao_inicio_atendimento);
             const year = d.getFullYear();
-            // Filtra anos absurdos (lixo de banco)
             if (year >= 2023 && year <= 2030) { 
                 const mesKey = `${year}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
                 
                 if (!targetMap[mesKey]) targetMap[mesKey] = { cTotal: 0, cOk: 0, eTotal: 0, eOk: 0 };
-
-                const tipo = (op.tipo_programacao || '').toLowerCase();
-                if (tipo.includes('colet') || tipo.includes('ova')) {
+                
+                const tipoLower = tipo.toLowerCase();
+                if (tipoLower.includes('colet') || tipoLower.includes('ova')) {
                   targetMap[mesKey].cTotal++;
                   if (noPrazo) targetMap[mesKey].cOk++;
                 } else {
@@ -1424,23 +1456,19 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
           }
         });
 
-        allOperacoes = allOperacoes.concat(data);
         if (data.length < pageSize) hasMore = false;
         currentPage++;
-        if (currentPage > 200) hasMore = false; // Safety break
+        if (currentPage > 200) hasMore = false; 
       }
     }
 
-    const totalExibido = totalAbsolutoBanco > 0 ? totalAbsolutoBanco : allOperacoes.length;
-
-    // Filtros de arrays finais
-    const validOps = allOperacoes.filter(op => !((op.status_operacao || '').toLowerCase().includes('cancel')));
-    const baseTotal = validOps.length > 0 ? validOps.length : 1;
+    const validOps = allOperacoes; 
+    const totalExibido = validOps.length;
+    const baseTotal = totalExibido > 0 ? totalExibido : 1;
 
     const coletas = validOps.filter(op => (op.tipo_programacao || '').toLowerCase().includes('colet'));
     const entregas = validOps.filter(op => (op.tipo_programacao || '').toLowerCase().includes('entreg'));
 
-    // Distribuição de Pontualidade
     const no_prazo = [], ate_1h = [], de_2_a_5h = [], de_5_a_10h = [], mais_10h = [];
 
     validOps.forEach(op => {
@@ -1454,7 +1482,6 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
 
     const calcPct = (parte, todo) => ((parte / todo) * 100).toFixed(1);
 
-    // Formatação dados Target Chart
     const targetChartData = Object.keys(targetMap).sort().map(key => {
       const d = targetMap[key];
       return {
@@ -1464,27 +1491,32 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
       };
     });
 
-    // Formatação dados Motivos
     const motivosArray = Object.entries(motivosMap)
       .map(([motivo, quantidade]) => ({
         motivo,
         quantidade,
-        percentual: calcPct(quantidade, baseTotal) // % sobre o total válido (não cancelado)
+        percentual: calcPct(quantidade, baseTotal)
       }))
       .sort((a, b) => b.quantidade - a.quantidade)
       .slice(0, 12);
 
-    // Mapper simples para retorno de lista (usado nos modais de clique)
-    const simpleMap = (arr) => arr.map(o => ({
-      id: o.id,
-      booking: o.booking,
-      container: o.containers,
-      embarcador_nome: o.embarcadores?.nome_principal || 'Não informado',
-      motivo_atraso: o.justificativa_atraso || o.motivo_atraso,
-      tipo_programacao: o.tipo_programacao,
-      previsao_inicio_atendimento: o.previsao_inicio_atendimento,
-      porto_operacao: o.pol || o.pod // Corrigido para enviar null se não existir
-    }));
+    const simpleMap = (arr) => arr.map(o => {
+        const tp = (o.tipo_programacao || '').toLowerCase();
+        let portoVisual = o.pol || o.pod;
+        if(tp.includes('colet')) portoVisual = o.pol;
+        else if(tp.includes('entreg')) portoVisual = o.pod;
+
+        return {
+          id: o.id,
+          booking: o.booking,
+          container: o.containers,
+          embarcador_nome: o.embarcadores?.nome_principal || 'Não informado',
+          motivo_atraso: o.justificativa_atraso || o.motivo_atraso,
+          tipo_programacao: o.tipo_programacao,
+          previsao_inicio_atendimento: o.previsao_inicio_atendimento,
+          porto_operacao: portoVisual
+        };
+    });
 
     const coletasNoPrazo = coletas.filter(o => calcularAtrasoLocal(o) <= 0).length;
     const entregasNoPrazo = entregas.filter(o => calcularAtrasoLocal(o) <= 0).length;
@@ -1494,7 +1526,7 @@ app.get("/admin/analytics/kpis", verifyTokenAndAttachUser, requireAdmin, async (
       data: {
         resumo: {
           total_operacoes: totalExibido,
-          canceladas: allOperacoes.length - validOps.length,
+          canceladas: 0,
           total_coletas: coletas.length,
           total_entregas: entregas.length
         },

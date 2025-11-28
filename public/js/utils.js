@@ -1,7 +1,7 @@
-// public/js/utils.js - VERSÃO CORRIGIDA FINAL
+// public/js/utils.js - VERSÃO COM TOLERÂNCIA MANAUS
 // =====================================================
 // ✅ CORREÇÕES APLICADAS:
-// 1. Removida tolerância especial de Manaus (todos portos iguais)
+// 1. Tolerância de 1h (60min) para operações no porto de Manaus
 // 2. Cálculo de atraso unificado e consistente
 // 3. Valores negativos (adiantados) retornam 0
 // 4. REMOVIDO: Uso de "Data de previsão de entrega recalculada"
@@ -71,13 +71,13 @@ export function formatDateForDisplay(dateLike) {
 }
 
 // ============================================================================
-// ✅ CÁLCULO DE ATRASO CORRIGIDO
+// ✅ CÁLCULO DE ATRASO CORRIGIDO COM TOLERÂNCIA PARA MANAUS
 // ============================================================================
 // REGRAS:
 // 1. Usa APENAS "Previsão início atendimento (BRA)" - NUNCA a recalculada
 // 2. Se não tiver "Dt Início da Execução", usa hora atual
-// 3. Número da programação é único por operação
-// 4. SEM console.log de debug (limpo)
+// 3. ✅ NOVO: Tolerância de 1h (60min) para operações no porto de MANAUS
+// 4. Número da programação é único por operação
 // ============================================================================
 
 export function calculateDelayInMinutes(op = {}) {
@@ -106,7 +106,8 @@ export function calculateDelayInMinutes(op = {}) {
     'situacao', 
     'status',
     'TipoOperacao',
-    'tipo_programacao'
+    'tipo_programacao',
+    'status_operacao'
   ]);
   
   if (situacao && situacao.toString().toLowerCase().includes('cancelad')) {
@@ -144,12 +145,26 @@ export function calculateDelayInMinutes(op = {}) {
   let atualDt = inicioStr ? parseBR(inicioStr) : new Date();
   if (!atualDt) atualDt = new Date();
 
-  // 4. Calcula diferença (SEM tolerância)
+  // 4. Calcula diferença bruta (SEM tolerância ainda)
   const diffMs = atualDt.getTime() - previsao.getTime();
   const diffMin = Math.floor(diffMs / 60000);
 
-  // Se diffMin for negativo (adiantado), retorna 0
-  return diffMin > 0 ? diffMin : 0;
+  // ✅ 5. APLICA TOLERÂNCIA DE 1H PARA MANAUS
+  const porto = get(op, [
+    'PortoOperacao',
+    'porto_operacao',
+    'POL',
+    'POD'
+  ]) || '';
+  
+  const ehManaus = porto.toString().toLowerCase().includes('manaus');
+  const toleranciaMin = ehManaus ? 60 : 0; // 1h para Manaus, 0 para outros portos
+
+  // Subtrai a tolerância do atraso calculado
+  const atrasoFinal = diffMin - toleranciaMin;
+
+  // Se for negativo (adiantado ou dentro da tolerância), retorna 0
+  return atrasoFinal > 0 ? atrasoFinal : 0;
 }
 
 // Expor globalmente para uso no admin.js e outros módulos

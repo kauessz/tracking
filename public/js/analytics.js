@@ -8,7 +8,7 @@
 
 import { Toast, Loading } from "./utilities.js";
 import { getApiUrl } from "./config.js";
-import { calculateDelayInMinutes } from "./utils.js";
+
 
 const API_BASE = getApiUrl();
 
@@ -262,22 +262,49 @@ function wireKPIClickHandlers() {
               </thead>
               <tbody>
                 ${ops.map(op => {
-                  const atraso = calculateDelayInMinutes(op);
-                  const atrasoStr = atraso > 0 ? `${Math.floor(atraso/60)}h ${atraso%60}m` : 'No Prazo';
-                  const atrasoClass = atraso > 0 ? 'text-red-600 font-bold' : 'text-green-600';
-                  
+                  // As operações já estão separadas por faixa no backend,
+                  // então usamos a categoria do KPI clicado para exibir o status.
+                  let atrasoStr = "No Prazo";
+                  let atrasoClass = "text-green-600";
+
+                  if (categoria.includes("Atraso até 1h")) {
+                    atrasoStr = "Até 1h";
+                    atrasoClass = "text-red-600 font-bold";
+                  } else if (categoria.includes("Atraso de 2 a 5h")) {
+                    atrasoStr = "2 a 5h";
+                    atrasoClass = "text-red-600 font-bold";
+                  } else if (categoria.includes("Atraso de 5 a 10h")) {
+                    atrasoStr = "5 a 10h";
+                    atrasoClass = "text-red-600 font-bold";
+                  } else if (categoria.includes("Atraso Maior que 10h")) {
+                    atrasoStr = "> 10h";
+                    atrasoClass = "text-red-600 font-bold";
+                  } else if (categoria.includes("Atraso")) {
+                    // Qualquer outra categoria com atraso genérico
+                    atrasoStr = "Atrasado";
+                    atrasoClass = "text-red-600 font-bold";
+                  }
+
+                  const prevInicioRaw =
+                    op.previsao_inicio_atendimento ||
+                    op.dt_previsao_inicio_atendimento ||
+                    op.previsao_inicio ||
+                    null;
+
+                  const prevInicioFmt = formatDate(prevInicioRaw);
+
                   return `
                     <tr class="border-b hover:bg-gray-50">
-                      <td class="p-3 text-sm">${op.booking || '-'}</td>
-                      <td class="p-3 text-sm">${op.containers || op.container || '-'}</td>
-                      <td class="p-3 text-sm">${op.embarcador_nome || '-'}</td>
-                      <td class="p-3 text-sm">${op.tipo_programacao || '-'}</td>
-                      <td class="p-3 text-sm">${op.porto_operacao || '-'}</td>
-                      <td class="p-3 text-sm">${formatDate(op.previsao_inicio_atendimento)}</td>
+                      <td class="p-3 text-sm">${op.booking || "-"}</td>
+                      <td class="p-3 text-sm">${op.container || op.containers || "-"}</td>
+                      <td class="p-3 text-sm">${op.embarcador_nome || "-"}</td>
+                      <td class="p-3 text-sm">${op.tipo_programacao || "-"}</td>
+                      <td class="p-3 text-sm">${op.porto_operacao || "-"}</td>
+                      <td class="p-3 text-sm">${prevInicioFmt || "-"}</td>
                       <td class="p-3 text-sm ${atrasoClass}">${atrasoStr}</td>
                     </tr>
                   `;
-                }).join('')}
+                }).join("")}
               </tbody>
             </table>
           </div>
@@ -672,6 +699,23 @@ export function limparFiltros() {
 
   Toast?.info?.("Filtros limpos");
 }
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+
+  // formata em pt-BR com hora e minuto
+  return (
+    d.toLocaleDateString("pt-BR") +
+    " " +
+    d.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  );
+};
+
 
 // Inicialização
 export function initAnalytics() {
