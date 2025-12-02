@@ -14,7 +14,7 @@
 [Documentação](#-documentação) •
 [Contribuir](#-contribuindo)
 
-<img src="https://user-images.githubusercontent.com/placeholder/tracking-dashboard.png" alt="Dashboard Preview" width="800"/>
+<img src="./DASHBOARD.png" alt="Dashboard Preview" width="800"/>
 
 </div>
 
