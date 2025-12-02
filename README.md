@@ -833,7 +833,7 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 ```
 MIT License
 
-Copyright (c) 2024 Logistics Tracking System
+Copyright (c) 2025 Logistics Tracking System
 
 Permission is hereby granted, free of charge, to any person obtaining a copy...
 ```
@@ -889,7 +889,7 @@ Encontrou algum problema? Tem alguma sugestão?
 
 **Desenvolvido com ❤️ para a comunidade logística**
 
-**Versão**: 1.0.0 | **Status**: ✅ Em Produção | **Última Atualização**: Dezembro 2024
+**Versão**: 1.0.0 | **Status**: ✅ Em Produção | **Última Atualização**: Dezembro 2025
 
 [⬆ Voltar ao topo](#-logistics-tracking-system)
 

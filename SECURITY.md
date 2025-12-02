@@ -316,7 +316,7 @@ _Seja o primeiro a contribuir!_
 
 ---
 
-**Última Atualização**: Dezembro 2024  
-**Próxima Revisão**: Março 2025
+**Última Atualização**: Dezembro 2025  
+**Próxima Revisão**: Março 2026
 
 Obrigado por ajudar a manter este projeto seguro! 🙏
